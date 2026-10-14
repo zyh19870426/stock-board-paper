@@ -67,6 +67,26 @@
         "topOnly": false,
         "boardFilter": "main"
       }
+    },
+    {
+      "id": "S4",
+      "name": "配置 5",
+      "params": {
+        "slots": 3,
+        "minLbc": 2,
+        "maxLbc": 4,
+        "stopLossPct": 20,
+        "trailPct": 20,
+        "exitMode": "break",
+        "maxHoldDays": 10,
+        "sortBy": "lbc",
+        "allocMode": "dynamic",
+        "refillOnSkip": false,
+        "skipLimitOpen": true,
+        "trailIntraday": true,
+        "topOnly": false,
+        "boardFilter": "main"
+      }
     }
   ]
 }
