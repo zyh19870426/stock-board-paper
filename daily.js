@@ -40,6 +40,8 @@ const money = c => (c / 100).toLocaleString('zh-CN', { minimumFractionDigits: 2,
 const pct = v => (v > 0 ? '+' : '') + (v * 100).toFixed(2) + '%'
 const yuan = c => (c > 0 ? '+' : '') + money(c)
 const ts = () => new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
+/* 多套策略参数一致时只显示一次（避免出现「亏损 20%、20% 止损」这类冗余） */
+const same = a => { const u = [...new Set(a.map(String))]; return u.length === 1 ? u[0] : a.join('、') }
 
 /* ---------------- 推送 ---------------- */
 function post (u, body, headers) {
@@ -206,8 +208,8 @@ function buildReport (date, results, meta) {
   L.push('---')
   L.push('')
   L.push('口径：T 日收盘选股 → T+1 开盘价买入（一字涨停开盘弃买）→ **买入当日不可卖出（A 股 T+1）**，断板判定从买入**次日**起 → 断板即出（**14:57 判定，未封则在收盘集合竞价卖出，成交价＝收盘价**）/ 亏损 ' +
-    results.map(r => r.params.stopLossPct + '%').join('、') + ' 止损 / 回撤 ' + results.map(r => r.params.trailPct + '%').join('、') +
-    ' 止损 / 最长持有 ' + results.map(r => r.params.maxHoldDays).join('、') + ' 个交易日。')
+    same(results.map(r => r.params.stopLossPct + '%')) + ' 止损 / 回撤 ' + same(results.map(r => r.params.trailPct + '%')) +
+    ' 止损 / 最长持有 ' + same(results.map(r => r.params.maxHoldDays)) + ' 个交易日。')
   L.push('')
   L.push('> T+1 说明：买入当天（T+1）无论是否封板都**不能卖**，所以「断板即出」实际执行是——**T+2 起**每个交易日 14:57 看是否封住涨停，没封才挂单卖出。')
   L.push('')
@@ -316,7 +318,11 @@ async function main () {
       startDate: cfg.startDate, initialCash: cfg.initialCash,
       strategies: results.map(r => ({
         id: r.id, name: r.name,
-        brief: '连板 ' + r.params.minLbc + '<N<' + r.params.maxLbc + ' · 止损 ' + r.params.stopLossPct + '% · 回撤 ' + r.params.trailPct + '% · 断板即出（T+1：次日起 14:57 判定 / 集合竞价成交）',
+        brief: (r.params.slots != null ? r.params.slots + ' 份 · ' : '')
+          + '连板 ' + r.params.minLbc + '<N<' + r.params.maxLbc
+          + ' · 止损 ' + r.params.stopLossPct + '% · 回撤 ' + r.params.trailPct + '% · 断板即出（T+1：次日起 14:57 判定 / 集合竞价成交）',
+        slots: r.params.slots,
+        lbcRange: r.params.minLbc + '<N<' + r.params.maxLbc,
         date: r.date,
         totalC: r.totalC, cashC: r.cashC, mvC: r.mvC,
         dayPnlC: r.dayPnlC, dayRet: r.dayRet,

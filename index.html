@@ -74,7 +74,15 @@
 <script>
 'use strict'
 var DATA = null, WIN = 0, STY = ['S1','S2']
-var C = {S1:'#4aa3f0', S2:'#f0a04a'}
+/* 配色：按策略出现顺序分配，策略数量不限（前两个与旧版 S1/S2 颜色一致） */
+var PAL = ['#4aa3f0', '#f0a04a', '#4dd0a0', '#c084fc', '#f472b6', '#facc15', '#38bdf8', '#fb923c']
+var IDS = []
+function colorOf (id) {
+  var i = IDS.indexOf(id)
+  if (i < 0) { IDS.push(id); i = IDS.length - 1 }
+  return PAL[i % PAL.length]
+}
+var C = { S1: '#4aa3f0', S2: '#f0a04a' }   // 保留（兼容），实际取色走 colorOf
 var fmtYuan = c => (c<0?'-':'') + Math.abs(c/100).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2})
 var signYuan = c => (c>0?'+':'') + fmtYuan(c)
 var pct = v => (v>0?'+':'') + (v*100).toFixed(2) + '%'
@@ -107,12 +115,12 @@ function render(d){
   document.getElementById('sub').textContent =
     '数据截至 '+dateCN+' 收盘 · 更新于 '+upCN+' · 起点 '+d.startDate+' · 每套策略本金 '+fmtYuan(d.initialCash*100)+' 元'
   document.getElementById('legend').innerHTML =
-    d.strategies.map(s=>'<span><i style="background:'+C[s.id]+'"></i>'+s.name+'</span>').join('')
+    d.strategies.map(s=>'<span><i style="background:'+colorOf(s.id)+'"></i>'+s.name+'</span>').join('')
 
   /* 指标卡 */
   var h = ''
   d.strategies.forEach(s=>{
-    h += '<div class="stitle" style="border-color:'+C[s.id]+'">'+s.name+'　<small style="color:var(--tx2);font-weight:400">'+s.brief+'</small></div>'
+    h += '<div class="stitle" style="border-color:'+colorOf(s.id)+'">'+s.name+'　<small style="color:var(--tx2);font-weight:400">'+s.brief+'</small></div>'
     h += '<div class="cards">'
       + card('当日盈亏', signYuan(s.dayPnlC)+' 元', cls(s.dayPnlC), '当日收益率 '+pct(s.dayRet))
       + card('累计收益率', pct(s.cumRet), cls(s.cumRet), '累计盈亏 '+signYuan(s.cumPnlC)+' 元')
@@ -124,7 +132,7 @@ function render(d){
 
   /* 两列：买卖记录 + 持仓/次日候选 */
   d.strategies.forEach(s=>{
-    var col = '<div class="stitle" style="border-color:'+C[s.id]+'">'+s.name+' · 成交与持仓</div>'
+    var col = '<div class="stitle" style="border-color:'+colorOf(s.id)+'">'+s.name+' · 成交与持仓</div>'
     var evs = []
     ;(s.trades||[]).forEach(t=>{
       evs.push({d:t.buyDate, ty:'买入', code:t.code, name:t.name, lbc:t.lbc, sh:t.shares, p:t.buyC, tag:'b'})
@@ -201,10 +209,10 @@ function drawChart(){
     var pts = s.pts.slice(from)
     if(!pts.length) return
     var path = pts.map((p,i)=>(i?'L':'M')+X(i).toFixed(1)+' '+Y(p.v).toFixed(1)).join(' ')
-    g += '<path d="'+path+'" fill="none" stroke="'+C[s.id]+'" stroke-width="2" stroke-linejoin="round"/>'
+    g += '<path d="'+path+'" fill="none" stroke="'+colorOf(s.id)+'" stroke-width="2" stroke-linejoin="round"/>'
     var last = pts[pts.length-1]
-    g += '<circle cx="'+X(pts.length-1)+'" cy="'+Y(last.v)+'" r="3.5" fill="'+C[s.id]+'"/>'
-      + '<text x="'+(X(pts.length-1)-6)+'" y="'+(Y(last.v)-8)+'" fill="'+C[s.id]+'" font-size="11" text-anchor="end" font-weight="600">'+pct(last.v/100)+'</text>'
+    g += '<circle cx="'+X(pts.length-1)+'" cy="'+Y(last.v)+'" r="3.5" fill="'+colorOf(s.id)+'"/>'
+      + '<text x="'+(X(pts.length-1)-6)+'" y="'+(Y(last.v)-8)+'" fill="'+colorOf(s.id)+'" font-size="11" text-anchor="end" font-weight="600">'+pct(last.v/100)+'</text>'
   })
   svg.setAttribute('viewBox','0 0 '+W+' '+H)
   svg.innerHTML = g

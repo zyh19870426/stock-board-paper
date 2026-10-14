@@ -75,6 +75,28 @@
   .empty{font-size:12px;color:var(--tx3);padding:6px 0 2px;line-height:1.8}
   .cfg-name{flex:1;min-width:220px;padding:6px 9px;border:1px solid var(--bd);border-radius:5px;font-size:12px;outline:none;background:#fff;color:var(--tx)}
   .cfg-name:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(26,115,232,.12)}
+  /* ---- 方案对比表 ---- */
+  .cfg-tbl td,.cfg-tbl th{padding:7px 9px}
+  .cfg-tbl td .sub{font-size:10px;color:var(--tx3);font-weight:400;line-height:1.2}
+  .cfg-tbl tr.live{background:#f2f8ff}
+  .cfg-tbl tr.live:hover{background:#eaf4ff}
+  .cfg-tbl td.ops{white-space:nowrap}
+  .cfg-tbl td.ops button{padding:3px 9px;font-size:11px;margin:0 3px 2px 0}
+  .cfg-tbl .rl{font-size:12px;font-weight:600}
+  button.warn{border-color:#e8c9a0;color:var(--warn)}
+  button.warn:hover{background:#fff8ef;border-color:#d9ab6a}
+  .tag.live-tag{background:#e3f0ff;color:#1a5fb4;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600;margin-left:4px}
+  /* ---- 云端每日模拟 ---- */
+  .gh-row{background:#f8fafc;border:1px solid var(--bd2);border-radius:6px;padding:8px 10px;margin-top:0!important}
+  .gh-lab{font-size:11px;color:var(--tx2);font-weight:600;white-space:nowrap}
+  .gh-tk{min-width:300px;flex:1}
+  #ghBox:empty{display:none}
+  .gh-box{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:11px;color:var(--tx2);
+    padding:8px 10px;background:#f8fafc;border:1px solid var(--bd2);border-radius:6px;margin-bottom:10px}
+  .gh-box .chip{background:#fff;border:1px solid var(--bd);border-radius:4px;padding:2px 8px;font-size:11px;color:var(--tx)}
+  .gh-box .chip b{font-weight:600}
+  .gh-ok{color:#0a8f3c}
+  .gh-bad{color:#b91c1c}
   .cloudbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 10px;font-size:12px}
   .cloudbar a{color:var(--accent);text-decoration:none;border:1px solid var(--bd);border-radius:5px;padding:4px 10px;background:#fff}
   .cloudbar a.on{background:var(--accent);color:#fff;border-color:var(--accent)}
@@ -139,7 +161,7 @@
     </div>
 
     <div class="card">
-      <h2>我的配置方案 <span class="tag" id="cfgCount">0 条已保存</span></h2>
+      <h2>我的配置方案 · 多时段收益对比 <span class="tag" id="cfgCount">0 条已保存</span></h2>
       <div class="row" style="margin:0 0 10px">
         <input id="cfgName" class="cfg-name" type="text" maxlength="40" placeholder="给这套参数起个名字，例如：四板接力·严止损">
         <button id="btnSaveCfg" class="primary">保存当前配置</button>
@@ -147,6 +169,16 @@
         <button id="btnImportCfg">导入</button>
         <input id="cfgFile" type="file" accept=".json,application/json" style="display:none">
       </div>
+      <div class="row gh-row">
+        <span class="gh-lab">云端每日模拟</span>
+        <input id="ghToken" class="cfg-name gh-tk" type="password" autocomplete="off"
+               placeholder="GitHub token（需 repo + workflow 权限；只留在本标签页内存，关闭即失效）">
+        <button id="btnGhRefresh" class="primary">连接云端</button>
+        <button id="btnGhForget">忘记 token</button>
+        <button id="btnGhDash">打开云端看板</button>
+        <span id="ghStatus" class="mut">未连接 · 下方表格里点「加入模拟」即可把方案接到每日任务</span>
+      </div>
+      <div id="ghBox"></div>
       <div id="cfgList"></div>
     </div>
 
@@ -329,7 +361,12 @@ function bind(){
   $('btnExportCfg').onclick=cfgExport
   $('btnImportCfg').onclick=function(){ $('cfgFile').click() }
   $('cfgFile').onchange=cfgImport
+  $('btnGhRefresh').onclick=ghConnect
+  $('btnGhForget').onclick=ghForget
+  $('btnGhDash').onclick=function(){ window.open(GH.page, '_blank', 'noopener') }
+  $('ghToken').value = ghTokenGet()
   cfgRender()
+  ghConnect()          // 无 token 时也会匿名读一次公开仓配置（失败则静默）
 }
 
 /* ================= 配置方案：保存 / 口语化描述 / 载入 ================= */
@@ -467,36 +504,273 @@ function cfgApply(id){
   try{ window.scrollTo({top:0,behavior:'smooth'}) }catch(e){ window.scrollTo(0,0) }
 }
 
-function cfgRender(){
+/* ================= 多时段收益对比（每套方案按各自窗口独立空仓起算） ================= */
+var WINS = [
+  { k: 30, label: '30 日' }, { k: 60, label: '60 日' }, { k: 90, label: '90 日' },
+  { k: 120, label: '120 日' }, { k: 0, label: '全程' }
+]
+var winCache = Object.create(null)
+
+function pkey (P) {
+  return [P.initialCash, P.slots, P.minLbc, P.maxLbc, P.stopLossPct, P.trailPct, P.maxHoldDays,
+    P.sortBy, P.allocMode, P.topOnly, P.refillOnSkip, P.skipLimitOpen, P.trailIntraday, P.boardFilter].join('|')
+}
+
+/* 对单套方案跑 5 个时间窗口（连板表已缓存，单次 <1ms，可直接同步算） */
+function windowStats (P) {
+  var k = pkey(P)
+  if (winCache[k]) return winCache[k]
+  var end = DS.dates.length - 1, out = {}
+  WINS.forEach(function (w) {
+    var Q = {}, f
+    for (f in P) if (Object.prototype.hasOwnProperty.call(P, f)) Q[f] = P[f]
+    Q.endIdx = end
+    Q.startIdx = w.k ? Math.max(DS.warmup, end - w.k + 1) : DS.warmup
+    Q.exitMode = 'break'
+    delete Q.window
+    var r = BS.runBacktest(DS, Q)
+    out[w.k] = r.error ? null : r.summary
+  })
+  winCache[k] = out
+  return out
+}
+
+/* ================= 云端每日模拟（读写 GitHub 仓库里的 config.json） ================= */
+var GH = {
+  owner: 'zyh19870426', repo: 'stock-board-paper', branch: 'main', file: 'config.json', wf: 'daily.yml'
+}
+GH.page = 'https://' + GH.owner + '.github.io/' + GH.repo + '/'
+GH.actions = 'https://github.com/' + GH.owner + '/' + GH.repo + '/actions/workflows/' + GH.wf
+var GH_TK_KEY = 'board-sim-ghtk'          // sessionStorage：关掉标签页即失效，不落盘
+var GH_STATE = { remote: null, sha: null, busy: false }
+
+function ghTokenGet () { try { return sessionStorage.getItem(GH_TK_KEY) || '' } catch (e) { return '' } }
+function ghTokenSet (v) { try { v ? sessionStorage.setItem(GH_TK_KEY, v) : sessionStorage.removeItem(GH_TK_KEY) } catch (e) {} }
+function b64enc (s) { return btoa(unescape(encodeURIComponent(s))) }
+function b64dec (s) { return decodeURIComponent(escape(atob(String(s).replace(/\s/g, '')))) }
+
+function ghApi (method, path, body) {
+  var tk = ghTokenGet()
+  var h = { 'Accept': 'application/vnd.github+json' }
+  if (tk) h['Authorization'] = 'Bearer ' + tk
+  if (body) h['Content-Type'] = 'application/json'
+  return fetch('https://api.github.com' + path, {
+    method: method, headers: h, body: body ? JSON.stringify(body) : undefined, cache: 'no-store'
+  }).then(function (r) {
+    if (r.status === 204) return null
+    return r.text().then(function (t) {
+      var j = null
+      try { j = JSON.parse(t) } catch (e) {}
+      if (r.ok) return j
+      var msg = (j && j.message) || ('HTTP ' + r.status)
+      if (r.status === 401) msg = 'token 无效或已过期（401）——重新生成一个再填进来'
+      if (r.status === 403) msg = '权限不足（403）：token 需要同时勾选 repo 与 workflow' + ((j && j.message) ? ' · ' + j.message : '')
+      if (r.status === 404) msg = GH.owner + '/' + GH.repo + ' 里读不到（404）：' + path
+      if (r.status === 409) msg = '保存冲突（409）：云端刚被其它提交改过，点「连接云端」重新读取后再试'
+      if (r.status === 422) msg = '参数被拒绝（422）：' + ((j && j.message) || '未知')
+      throw new Error(msg)
+    })
+  })
+}
+
+/* 策略参数标准化：字段顺序固定，保证「本地方案 ↔ 云端策略」可逐字比对（识别是否已在跑） */
+var PARAM_ORDER = ['slots', 'minLbc', 'maxLbc', 'stopLossPct', 'trailPct', 'exitMode', 'maxHoldDays',
+  'sortBy', 'allocMode', 'refillOnSkip', 'skipLimitOpen', 'trailIntraday', 'topOnly', 'boardFilter']
+var PARAM_DEF = {
+  slots: 2, minLbc: 2, maxLbc: 4, stopLossPct: 20, trailPct: 20, exitMode: 'break', maxHoldDays: 10,
+  sortBy: 'lbc', allocMode: 'dynamic', refillOnSkip: false, skipLimitOpen: true,
+  trailIntraday: true, topOnly: false, boardFilter: 'main'
+}
+function cleaned (P) {
+  var o = {}
+  PARAM_ORDER.forEach(function (k) { o[k] = (k === 'exitMode') ? 'break' : (P[k] === undefined ? PARAM_DEF[k] : P[k]) })
+  return o
+}
+function sigOf (P) { return JSON.stringify(cleaned(P)) }
+function liveMatch (P) {
+  var d = GH_STATE.remote
+  if (!d || !d.strategies) return null
+  var sig = sigOf(P)
+  for (var i = 0; i < d.strategies.length; i++) {
+    if (sigOf(d.strategies[i].params) === sig) return d.strategies[i]
+  }
+  return null
+}
+
+function ghConnect () {
+  var tk = ($('ghToken').value || '').trim()
+  ghTokenSet(tk)
+  $('ghStatus').innerHTML = '读取中…'
+  ghApi('GET', '/repos/' + GH.owner + '/' + GH.repo + '/contents/' + GH.file + '?ref=' + GH.branch)
+    .then(function (j) {
+      var obj = JSON.parse(b64dec(j.content))
+      GH_STATE.remote = obj
+      GH_STATE.sha = j.sha
+      $('ghStatus').innerHTML = '<span class="gh-ok">已连接</span> · 云端在跑 <b>' + (obj.strategies || []).length
+        + '</b> 套 · 起点 ' + esc(obj.startDate || '—') + (ghTokenGet() ? '' : ' · 只读模式（填入 token 才能加入/移出）')
+      ghRenderBox(); cfgRender()
+    })
+    .catch(function (e) {
+      GH_STATE.remote = null; GH_STATE.sha = null
+      $('ghStatus').innerHTML = '<span class="gh-bad">未连上</span> · ' + esc(e.message)
+      ghRenderBox(); cfgRender()
+    })
+}
+
+function ghForget () {
+  ghTokenSet('')
+  $('ghToken').value = ''
+  $('ghStatus').textContent = '已忘记 token（只清当前标签页，仓库里的策略不受影响）'
+}
+
+function ghRenderBox () {
+  var d = GH_STATE.remote
+  if (!d || !d.strategies || !d.strategies.length) { $('ghBox').innerHTML = ''; return }
+  var h = '<div class="gh-box"><span>云端在跑：</span>'
+  d.strategies.forEach(function (s) {
+    h += '<span class="chip"><b>' + esc(s.id) + '</b> ' + esc(s.name)
+      + '<span class="mut"> · ' + (s.params.slots != null ? s.params.slots : '?') + ' 份 · '
+      + (lbcRange(s.params) || '—') + '</span></span>'
+  })
+  h += '<span class="mut" style="margin-left:6px">起点 ' + esc(d.startDate || '—') + ' · 每套本金 ¥' + money2(d.initialCash || 0) + '</span>'
+  h += '<a href="' + GH.page + '" target="_blank" rel="noopener" style="margin-left:auto">看每日收益 →</a></div>'
+  $('ghBox').innerHTML = h
+}
+
+/* 写入 config.json 并触发云端重放（重放是幂等的：从固定起点重算，重复触发不会算错） */
+function ghWrite (nextObj, message) {
+  $('ghStatus').innerHTML = '写入中…'
+  var content = b64enc(JSON.stringify(nextObj, null, 2) + '\n')
+  ghApi('PUT', '/repos/' + GH.owner + '/' + GH.repo + '/contents/' + GH.file, {
+    message: message, content: content, sha: GH_STATE.sha, branch: GH.branch
+  }).then(function (j) {
+    GH_STATE.remote = nextObj
+    if (j && j.content && j.content.sha) GH_STATE.sha = j.content.sha
+    $('ghStatus').innerHTML = '<span class="gh-ok">配置已写入</span> · 正在触发云端重放…'
+    ghRenderBox(); cfgRender()
+    return ghApi('POST', '/repos/' + GH.owner + '/' + GH.repo + '/actions/workflows/' + GH.wf + '/dispatches', { ref: GH.branch })
+      .then(function () {
+        $('ghStatus').innerHTML = '<span class="gh-ok">已写入并触发云端重放</span> · 约 2~5 分钟后生效 · '
+          + '<a href="' + GH.actions + '" target="_blank" rel="noopener">看运行状态</a>'
+      })
+      .catch(function (e) {
+        $('ghStatus').innerHTML = '<span class="gh-ok">配置已写入</span> · <span class="gh-bad">但没能触发重放</span>：'
+          + esc(e.message) + '（会等下一个交易日 15:40 自动生效）'
+      })
+  }).catch(function (e) {
+    $('ghStatus').innerHTML = '<span class="gh-bad">写入失败</span> · ' + esc(e.message)
+    alert('写入失败：' + e.message)
+  })
+}
+
+function cfgLive (id) {
+  var c = cfgAll().filter(function (x) { return x.id === id })[0]; if (!c) return
+  if (!ghTokenGet()) {
+    alert('还没填 token。\n\n请在「云端每日模拟」那一行填入 GitHub token（需同时勾选 repo 与 workflow 权限），点「连接云端」后再加入。\n\ntoken 只存在当前标签页内存里，关掉标签页就没了。')
+    $('ghToken').focus(); return
+  }
+  if (!GH_STATE.remote || !GH_STATE.sha) { alert('还没读到云端配置。先点「连接云端」再试。'); return }
+  var P = cleaned(c.params)
+  if (!lbcRange(P)) { alert('这套方案的连板区间是空的（下限 ≥ 上限），跑不出交易，不能加入。'); return }
+  var names = GH_STATE.remote.strategies.map(function (s) { return s.name })
+  var name = c.name, i = 2
+  while (names.indexOf(name) >= 0) name = c.name + ' (' + (i++) + ')'
+  var ids = GH_STATE.remote.strategies.map(function (s) { return s.id })
+  var n = 1; while (ids.indexOf('S' + n) >= 0) n++
+  var sid = 'S' + n
+  if (!confirm('把「' + c.name + '」接到云端每日模拟？\n\n'
+    + '策略名：' + name + '（标识 ' + sid + '）\n'
+    + '配置：' + P.slots + ' 份 · ' + lbcRange(P) + ' · 止损 ' + P.stopLossPct + '% · 回撤 ' + P.trailPct + '%\n'
+    + '起点：' + GH_STATE.remote.startDate + '（与其它策略同日可比，历史会自动补算）\n\n'
+    + '写入后会立即触发一次云端重放，2~5 分钟后云端看板就能看到它。')) return
+  var next = JSON.parse(JSON.stringify(GH_STATE.remote))
+  next.strategies.push({ id: sid, name: name, params: P })
+  ghWrite(next, '加入策略 ' + sid + ' ' + name)
+}
+
+function cfgUnlive (id) {
+  var c = cfgAll().filter(function (x) { return x.id === id })[0]; if (!c) return
+  var hit = liveMatch(c.params)
+  if (!hit) { alert('云端找不到与这套参数相同的策略，可能已被移出。点「连接云端」刷新一下。'); return }
+  if (!ghTokenGet()) { alert('移出云端策略需要 token，请先填写。'); $('ghToken').focus(); return }
+  if (!confirm('把「' + hit.name + '」（' + hit.id + '）从云端每日模拟里移出？\n\n云端会删掉它这一整套账户与记录，重新加入会从起点重算。')) return
+  var next = JSON.parse(JSON.stringify(GH_STATE.remote))
+  next.strategies = next.strategies.filter(function (s) { return s.id !== hit.id })
+  ghWrite(next, '移出策略 ' + hit.id + ' ' + hit.name)
+}
+
+function cfgRender () {
   var list = cfgAll()
   $('cfgCount').textContent = list.length + ' 条已保存'
-  if(!list.length){
-    $('cfgList').innerHTML = '<div class="empty">还没有保存过配置。调出一组你满意的参数后，在上面填个名字点「保存当前配置」，这里会生成一条记录：<b>口语化的操作说明 + 基于本次回测的注意事项</b>。数据存在浏览器本地，换浏览器或清缓存会丢，建议定期「导出全部」备份成文件。</div>'
+  if (!list.length) {
+    $('cfgList').innerHTML = '<div class="empty">还没有保存过配置。调出一组你满意的参数后，在上面填个名字点「保存当前配置」，'
+      + '这里会生成一张对比表：<b>资金份数 · 连板数 · 30/60/90/120/全程收益率</b>，'
+      + '每一套都能一键接到云端每日模拟，让程序按真实行情天天跑。</div>'
     return
   }
-  $('cfgList').innerHTML = list.map(function(c){
-    var st = c.stats || {}
-    var cls = st.returnPct>0?'up':(st.returnPct<0?'dn':'mut')
-    return '<div class="cfg">'
-      + '<div class="cfg-h"><div>'
-      +   '<div class="cfg-n">'+esc(c.name)+'</div>'
-      +   '<div class="cfg-m">保存于 '+fmtTs(c.ts)+' · 总收益 <b class="'+cls+'">'+signed(st.returnPct||0,1)+'</b>'
-      +   ' · 成功率 <b>'+fmtPct(st.winRate||0,1)+'</b> · '+st.tradeCount+' 笔 · 平均持有 '+(st.avgHoldDays?st.avgHoldDays.toFixed(1):'0')+' 日</b>'
-      +   ' · 区间 '+(st.startDate||'')+' ~ '+(st.endDate||'')+'</div>'
-      + '</div><div class="cfg-b">'
-      +   '<button data-apply="'+c.id+'">载入这套</button>'
-      +   '<button data-del="'+c.id+'">删除</button>'
-      + '</div></div>'
-      + '<div class="cfg-d">'+ (c.desc||'') +'</div>'
-      + '<div class="cfg-w"><b>注意事项（按本次回测的真实数据生成）</b><ul>'
-      + (c.notes||[]).map(function(n){ return '<li>'+n+'</li>' }).join('')
-      + '</ul></div></div>'
-  }).join('')
-  Array.prototype.forEach.call($('cfgList').querySelectorAll('[data-apply]'), function(b){
-    b.onclick = function(){ cfgApply(b.getAttribute('data-apply')) }
+  var thru = DS ? ((DS.meta && (DS.meta.through || DS.meta.lastDate)) || DS.dates[DS.dates.length - 1]) : '—'
+  var days = DS ? DS.dates.length : 0
+  var h = '<div class="mut" style="font-size:11px;line-height:1.75;margin:2px 0 8px">'
+    + '收益 = 用当前数据集（<b>' + days + '</b> 个交易日，截至 ' + esc(thru) + '）按各自时间窗口<b>独立空仓起算</b>的历史回测，'
+    + '不是云端每日模拟的累计收益；窗口越短笔数越少，越容易被一两笔极端盈亏带偏。<br>'
+    + '云端每日任务用的是<b>累积数据集</b>（每日追加，通常比这里的快照新 1 个交易日），同一套策略两边可能差最后一个交易日。'
+    + '想用累积数据集回测：<span class="pill">node server.js</span> 打开本页，地址后加 <span class="pill">?ds=paper/data/store.json</span>。</div>'
+  h += '<div class="scroll" style="max-height:none"><table class="cfg-tbl"><thead><tr>'
+  h += '<th class="tl">方案名</th><th>资金份数</th><th>连板数</th>'
+  WINS.forEach(function (w) { h += '<th>' + w.label + '</th>' })
+  h += '<th>全程回撤</th><th class="tl">操作</th></tr></thead><tbody>'
+
+  list.forEach(function (c) {
+    var P = c.params || {}
+    var st = windowStats(P)
+    var hit = liveMatch(P)
+    h += '<tr' + (hit ? ' class="live"' : '') + '>'
+    h += '<td class="tl"><span class="rl">' + esc(c.name) + '</span>'
+      + (hit ? '<span class="tag live-tag">模拟中 ' + esc(hit.id) + '</span>' : '') + '</td>'
+    h += '<td>' + (P.slots != null ? P.slots : '—') + ' 份</td>'
+    h += '<td>' + (lbcRange(P) || '<span class="mut">空区间</span>') + '</td>'
+    WINS.forEach(function (w) {
+      var s = st[w.k]
+      if (!s) { h += '<td class="mut">—</td>'; return }
+      h += '<td class="' + signCls(s.returnPct) + '">' + signed(s.returnPct, 1)
+        + '<div class="sub">' + (s.tradeCount || 0) + ' 笔 · 胜' + fmtPct(s.winRate, 0) + '</div></td>'
+    })
+    var full = st[0]
+    h += '<td class="dn">' + (full ? '-' + fmtPct(full.maxDrawdown, 1) : '—') + '</td>'
+    h += '<td class="tl ops">'
+      + '<button data-apply="' + c.id + '">载入</button>'
+      + (hit ? '<button data-unlive="' + c.id + '" class="warn">移出模拟</button>'
+             : '<button data-live="' + c.id + '" class="primary">加入模拟</button>')
+      + '<button data-del="' + c.id + '">删除</button>'
+      + '</td></tr>'
   })
-  Array.prototype.forEach.call($('cfgList').querySelectorAll('[data-del]'), function(b){
-    b.onclick = function(){ cfgDelete(b.getAttribute('data-del')) }
+  h += '</tbody></table></div>'
+
+  h += '<details style="margin-top:10px"><summary>展开各方案的操作说明与注意事项（' + list.length + ' 条）</summary>'
+  list.forEach(function (c) {
+    h += '<div class="cfg">'
+      + '<div class="cfg-h"><div><div class="cfg-n">' + esc(c.name) + '</div>'
+      + '<div class="cfg-m">保存于 ' + fmtTs(c.ts)
+      + (c.stats && c.stats.startDate ? ' · 保存时区间 ' + c.stats.startDate + ' ~ ' + c.stats.endDate : '') + '</div></div></div>'
+      + '<div class="cfg-d">' + (c.desc || '') + '</div>'
+      + '<div class="cfg-w"><b>注意事项（按保存时那次回测的真实数据生成）</b><ul>'
+      + (c.notes || []).map(function (n) { return '<li>' + n + '</li>' }).join('')
+      + '</ul></div></div>'
+  })
+  h += '</details>'
+  $('cfgList').innerHTML = h
+
+  Array.prototype.forEach.call($('cfgList').querySelectorAll('[data-apply]'), function (b) {
+    b.onclick = function () { cfgApply(b.getAttribute('data-apply')) }
+  })
+  Array.prototype.forEach.call($('cfgList').querySelectorAll('[data-del]'), function (b) {
+    b.onclick = function () { cfgDelete(b.getAttribute('data-del')) }
+  })
+  Array.prototype.forEach.call($('cfgList').querySelectorAll('[data-live]'), function (b) {
+    b.onclick = function () { cfgLive(b.getAttribute('data-live')) }
+  })
+  Array.prototype.forEach.call($('cfgList').querySelectorAll('[data-unlive]'), function (b) {
+    b.onclick = function () { cfgUnlive(b.getAttribute('data-unlive')) }
   })
 }
 
