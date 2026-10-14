@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>打板模拟跟进 · 每日收益看板</title>
+<style>
+  :root{
+    --bg:#0e1420; --panel:#161e2e; --panel2:#1b2438; --line:#2a3550;
+    --tx:#dfe6f3; --tx2:#8fa0bf; --up:#f04a4a; --dn:#2fbf71;
+    --s1:#4aa3f0; --s2:#f0a04a; --accent:#4aa3f0;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--tx);font:14px/1.6 "Segoe UI","Microsoft YaHei",sans-serif;padding:20px 16px 60px}
+  .wrap{max-width:1080px;margin:0 auto}
+  h1{font-size:20px;font-weight:600}
+  .sub{color:var(--tx2);font-size:12px;margin-top:2px}
+  .winbar{display:flex;gap:8px;margin:16px 0 10px;align-items:center;flex-wrap:wrap}
+  .winbar button{background:var(--panel);border:1px solid var(--line);color:var(--tx2);padding:5px 14px;border-radius:6px;cursor:pointer;font-size:13px}
+  .winbar button.on{background:var(--panel2);color:var(--tx);border-color:var(--accent)}
+  .legend{margin-left:auto;display:flex;gap:16px;font-size:12px;color:var(--tx2)}
+  .legend i{display:inline-block;width:18px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}
+  .chartbox{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-top:16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .card .t{font-size:12px;color:var(--tx2)}
+  .card .v{font-size:19px;font-weight:600;margin-top:2px}
+  .card .m{font-size:11px;color:var(--tx2);margin-top:1px}
+  .up{color:var(--up)} .dn{color:var(--dn)}
+  .stitle{margin:26px 0 8px;font-size:15px;font-weight:600;border-left:3px solid var(--accent);padding-left:8px}
+  table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;font-size:13px}
+  th,td{padding:7px 10px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{background:var(--panel2);color:var(--tx2);font-weight:500;font-size:12px}
+  td:first-child,th:first-child,td.l,th.l{text-align:left}
+  tr:last-child td{border-bottom:none}
+  .tag{display:inline-block;padding:1px 7px;border-radius:4px;font-size:11px}
+  .tag.b{background:rgba(74,163,240,.15);color:var(--s1)}
+  .tag.s{background:rgba(240,74,74,.12);color:var(--up)}
+  .tag.sk{background:rgba(143,160,191,.15);color:var(--tx2)}
+  .empty{background:var(--panel);border:1px dashed var(--line);border-radius:10px;padding:26px;text-align:center;color:var(--tx2)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:860px){.grid2{grid-template-columns:1fr}}
+  .foot{margin-top:26px;color:var(--tx2);font-size:11px}
+  #err{display:none;background:rgba(240,74,74,.1);border:1px solid rgba(240,74,74,.4);color:var(--up);border-radius:8px;padding:12px;margin:14px 0;font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>打板模拟跟进 · 每日收益看板</h1>
+  <div class="sub" id="sub">加载中…</div>
+  <div id="err"></div>
+
+  <div class="winbar">
+    <span style="color:var(--tx2);font-size:13px">收益曲线</span>
+    <button data-w="7">7天</button><button data-w="30">30天</button>
+    <button data-w="60">60天</button><button data-w="90">90天</button>
+    <button data-w="0" class="on">全部</button>
+    <div class="legend" id="legend"></div>
+  </div>
+  <div class="chartbox"><svg id="chart" width="100%" height="260" preserveAspectRatio="none"></svg></div>
+
+  <div id="panels"></div>
+
+  <div class="foot">口径：T 日收盘选股 → T+1 开盘价买入（一字涨停弃买）→ 断板即出 / 止损 / 回撤 / 最长 10 个交易日。<br>
+  模拟盘按开盘价 / 触发价理想成交，未计滑点与冲击成本；数据由每日收盘后自动任务生成，不构成投资建议。</div>
+</div>
+
+<script>
+'use strict'
+var DATA = null, WIN = 0, STY = ['S1','S2']
+var C = {S1:'#4aa3f0', S2:'#f0a04a'}
+var fmtYuan = c => (c<0?'-':'') + Math.abs(c/100).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2})
+var signYuan = c => (c>0?'+':'') + fmtYuan(c)
+var pct = v => (v>0?'+':'') + (v*100).toFixed(2) + '%'
+var cls = v => v>0?'up':(v<0?'dn':'')
+var price = c => (c/100).toFixed(2)
+
+document.querySelectorAll('.winbar button').forEach(b=>{
+  b.onclick = function(){
+    document.querySelectorAll('.winbar button').forEach(x=>x.classList.remove('on'))
+    this.classList.add('on'); WIN = +this.dataset.w; drawChart()
+  }
+})
+
+function fetchJSON(){
+  var t = Date.now()
+  fetch('./data/dashboard.json?_='+t).then(r=>{
+    if(!r.ok) throw new Error('HTTP '+r.status)
+    return r.json()
+  }).then(render).catch(e=>{
+    document.getElementById('err').style.display='block'
+    document.getElementById('err').textContent = '数据加载失败：'+e.message+'。若是本地直接双击打开，请访问线上地址（GitHub Pages）；线上页面则等每日任务跑完后 2~3 分钟再刷新。'
+    document.getElementById('sub').textContent = '加载失败'
+  })
+}
+
+function render(d){
+  DATA = d
+  var dateCN = d.date.slice(0,4)+'-'+d.date.slice(4,6)+'-'+d.date.slice(6,8)
+  var upCN = new Date(d.updated).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'})
+  document.getElementById('sub').textContent =
+    '数据截至 '+dateCN+' 收盘 · 更新于 '+upCN+' · 起点 '+d.startDate+' · 每套策略本金 '+fmtYuan(d.initialCash*100)+' 元'
+  document.getElementById('legend').innerHTML =
+    d.strategies.map(s=>'<span><i style="background:'+C[s.id]+'"></i>'+s.name+'</span>').join('')
+
+  /* 指标卡 */
+  var h = ''
+  d.strategies.forEach(s=>{
+    h += '<div class="stitle" style="border-color:'+C[s.id]+'">'+s.name+'　<small style="color:var(--tx2);font-weight:400">'+s.brief+'</small></div>'
+    h += '<div class="cards">'
+      + card('当日盈亏', signYuan(s.dayPnlC)+' 元', cls(s.dayPnlC), '当日收益率 '+pct(s.dayRet))
+      + card('累计收益率', pct(s.cumRet), cls(s.cumRet), '累计盈亏 '+signYuan(s.cumPnlC)+' 元')
+      + card('总资产', fmtYuan(s.totalC)+' 元', '', '现金 '+fmtYuan(s.cashC)+' + 市值 '+fmtYuan(s.mvC))
+      + card('胜率 / 笔数', s.tradeCount? (s.winRate*100).toFixed(1)+'% / '+s.tradeCount+' 笔':'—', '', '最大回撤 '+(s.maxDrawdown*100).toFixed(2)+'%')
+    h += '</div>'
+  })
+  document.getElementById('panels').innerHTML = h
+
+  /* 两列：买卖记录 + 持仓/次日候选 */
+  d.strategies.forEach(s=>{
+    var col = '<div class="stitle" style="border-color:'+C[s.id]+'">'+s.name+' · 成交与持仓</div>'
+    var evs = []
+    ;(s.trades||[]).forEach(t=>{
+      evs.push({d:t.buyDate, ty:'买入', code:t.code, name:t.name, lbc:t.lbc, sh:t.shares, p:t.buyC, tag:'b'})
+      evs.push({d:t.sellDate, ty:'卖出', code:t.code, name:t.name, lbc:t.lbc, sh:t.shares, p:t.sellC,
+        pnl:t.pnlC, pp:t.pnlPct, reason:t.reason, tag:'s'})
+    })
+    ;(s.positions||[]).forEach(p=> evs.push({d:p.buyDate, ty:'买入', code:p.code, name:p.name, lbc:p.lbc, sh:p.shares, p:p.buyC, tag:'b', open:'持仓中'}))
+    evs.sort((a,b)=> a.d===b.d ? (a.ty<b.ty?-1:1) : (a.d<b.d?1:-1))
+    col += evs.length
+      ? '<table><tr><th class="l">日期</th><th class="l">操作</th><th class="l">代码</th><th class="l">名称</th><th>板</th><th>价格</th><th>股数</th><th>盈亏</th><th class="l">备注</th></tr>'
+        + evs.map(e=>{
+            var pnl = e.tag==='s' ? '<span class="'+cls(e.pnl)+'">'+signYuan(e.pnl)+'（'+pct(e.pp)+'）</span>' : (e.open?'<span class="tag sk">'+e.open+'</span>':'')
+            return '<tr><td class="l">'+e.d+'</td><td class="l"><span class="tag '+e.tag+'">'+e.ty+'</span></td>'
+              +'<td class="l">'+e.code+'</td><td class="l">'+e.name+'</td><td>'+e.lbc+'</td>'
+              +'<td>'+price(e.p)+'</td><td>'+e.sh+'</td><td>'+pnl+'</td><td class="l" style="color:var(--tx2)">'+(e.reason||'')+'</td></tr>'
+          }).join('') + '</table>'
+      : '<div class="empty">暂无成交 —— 模拟盘 '+d.startDate+' 启动，首笔买入在下一交易日开盘执行</div>'
+    col += '<div style="height:14px"></div>'
+    col += '<table><tr><th class="l">当前持仓</th></tr>'
+    col += (s.positions&&s.positions.length)
+      ? s.positions.map(p=>'<tr><td class="l">'+p.code+' '+p.name+'　'+p.lbc+' 板 · '+p.shares+' 股 · 买入价 '+price(p.buyC)+'（'+p.buyDate+'）</td></tr>').join('')
+      : '<tr><td class="l" style="color:var(--tx2)">空仓</td></tr>'
+    col += '</table>'
+    col += '<div style="height:14px"></div>'
+    col += '<table><tr><th class="l">次日待买（'+dateCN+' 收盘选出）</th></tr>'
+    col += (s.nextCandidates&&s.nextCandidates.length)
+      ? s.nextCandidates.map((c,i)=>'<tr><td class="l">第'+(i+1)+'顺位　'+c.code+' '+c.name+'　'+c.lbc+' 板　成交额 '+((c.amount||0)/1e8).toFixed(2)+' 亿</td></tr>').join('')
+      : '<tr><td class="l" style="color:var(--tx2)">无候选</td></tr>'
+    col += '</table>'
+    document.getElementById('panels').innerHTML += '<div class="grid2" style="margin-top:8px">'+col+'</div>'
+  })
+
+  drawChart()
+}
+
+function card(t, v, cl, m){
+  return '<div class="card"><div class="t">'+t+'</div><div class="v '+cl+'">'+v+'</div><div class="m">'+m+'</div></div>'
+}
+
+/* ---------- 累计收益率曲线（SVG） ---------- */
+function drawChart(){
+  var svg = document.getElementById('chart')
+  if(!DATA) return
+  var W = svg.clientWidth || 1000, H = 260, padL = 52, padR = 14, padT = 14, padB = 26
+  var series = DATA.strategies.map(s=>({id:s.id, name:s.name, pts:(s.daily||[]).map(e=>({d:e.d, v:e.cr*100}))}))
+  var maxLen = Math.max.apply(null, series.map(s=>s.pts.length))
+  if(!maxLen){ svg.innerHTML=''; return }
+  var from = WIN>0 ? Math.max(0, maxLen-WIN) : 0
+  var n = maxLen - from
+  var all = []
+  series.forEach(s=> s.pts.slice(from).forEach(p=>all.push(p.v)))
+  var mn = Math.min(0, Math.min.apply(null, all)), mx = Math.max(0.0001, Math.max.apply(null, all))
+  var pad = (mx-mn)*0.12; mn-=pad; mx+=pad
+  var X = i => padL + (n<2 ? 0 : (W-padL-padR)*i/(n-1))
+  var Y = v => padT + (H-padT-padB)*(mx-v)/(mx-mn)
+
+  var g = '<rect x="0" y="0" width="'+W+'" height="'+H+'" fill="#161e2e" rx="8"/>'
+  /* 网格 + y 轴刻度 */
+  for(var k=0;k<=4;k++){
+    var vv = mn + (mx-mn)*k/4, yy = Y(vv)
+    g += '<line x1="'+padL+'" y1="'+yy+'" x2="'+(W-padR)+'" y2="'+yy+'" stroke="#2a3550" stroke-width="1"'+(Math.abs(vv)<1e-9?' stroke-dasharray="4 3"':'')+'>'
+      + '<text x="'+(padL-6)+'" y="'+(yy+4)+'" fill="#8fa0bf" font-size="11" text-anchor="end">'+vv.toFixed(1)+'%</text>'
+  }
+  /* 零轴以下淡红、以上淡绿? 否：零轴加粗虚线即可（A股红涨绿跌只用于数字） */
+  /* x 轴日期：首/中/尾 */
+  var d0 = series[0].pts, lbl = [from, from+Math.floor((n-1)/2), from+n-1]
+  lbl.forEach((gi,li)=>{
+    if(!d0[gi]) return
+    var dd = d0[gi].d
+    var txt = dd.slice(4,6)+'-'+dd.slice(6,8)
+    g += '<text x="'+X(gi-from)+'" y="'+(H-8)+'" fill="#8fa0bf" font-size="11" text-anchor="'+(li===0?'start':(li===2?'end':'middle'))+'">'+txt+'</text>'
+  })
+  series.forEach(s=>{
+    var pts = s.pts.slice(from)
+    if(!pts.length) return
+    var path = pts.map((p,i)=>(i?'L':'M')+X(i).toFixed(1)+' '+Y(p.v).toFixed(1)).join(' ')
+    g += '<path d="'+path+'" fill="none" stroke="'+C[s.id]+'" stroke-width="2" stroke-linejoin="round"/>'
+    var last = pts[pts.length-1]
+    g += '<circle cx="'+X(pts.length-1)+'" cy="'+Y(last.v)+'" r="3.5" fill="'+C[s.id]+'"/>'
+      + '<text x="'+(X(pts.length-1)-6)+'" y="'+(Y(last.v)-8)+'" fill="'+C[s.id]+'" font-size="11" text-anchor="end" font-weight="600">'+pct(last.v/100)+'</text>'
+  })
+  svg.setAttribute('viewBox','0 0 '+W+' '+H)
+  svg.innerHTML = g
+}
+
+fetchJSON()
+</script>
+</body>
+</html>

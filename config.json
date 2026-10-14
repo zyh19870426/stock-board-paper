@@ -1,0 +1,52 @@
+{
+  "_说明": "模拟跟进交易配置。strategies 数组里每一项是一套独立策略，各自 10 万本金、各自账户、互不干扰。改完直接提交，下一次定时任务生效。",
+  "_字段": {
+    "startDate": "模拟起点（这一天的收盘用来选股，次日开盘为第一笔买入）",
+    "initialCash": "每套策略的初始本金（元）",
+    "params": "完整透传给 lib/strategy.js 的 runBacktest；离场规则固定 exitMode='break'（断板即出），封板强度过滤已下线"
+  },
+  "startDate": "2026-10-14",
+  "initialCash": 100000,
+  "strategies": [
+    {
+      "id": "S1",
+      "name": "策略1 · 只买3板",
+      "params": {
+        "slots": 2,
+        "minLbc": 2,
+        "maxLbc": 4,
+        "stopLossPct": 20,
+        "trailPct": 20,
+        "exitMode": "break",
+        "maxHoldDays": 10,
+        "sortBy": "lbc",
+        "allocMode": "dynamic",
+        "refillOnSkip": false,
+        "skipLimitOpen": true,
+        "trailIntraday": true,
+        "topOnly": false,
+        "boardFilter": "main"
+      }
+    },
+    {
+      "id": "S2",
+      "name": "策略2 · 只买5板",
+      "params": {
+        "slots": 2,
+        "minLbc": 4,
+        "maxLbc": 6,
+        "stopLossPct": 20,
+        "trailPct": 20,
+        "exitMode": "break",
+        "maxHoldDays": 10,
+        "sortBy": "lbc",
+        "allocMode": "dynamic",
+        "refillOnSkip": false,
+        "skipLimitOpen": true,
+        "trailIntraday": true,
+        "topOnly": false,
+        "boardFilter": "main"
+      }
+    }
+  ]
+}
