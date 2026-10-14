@@ -41,6 +41,9 @@
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
   @media(max-width:860px){.grid2{grid-template-columns:1fr}}
   .foot{margin-top:26px;color:var(--tx2);font-size:11px}
+  .nav{margin-top:8px;font-size:13px}
+  .nav a{color:var(--accent);text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:5px 12px;display:inline-block}
+  .nav a:hover{border-color:var(--accent)}
   #err{display:none;background:rgba(240,74,74,.1);border:1px solid rgba(240,74,74,.4);color:var(--up);border-radius:8px;padding:12px;margin:14px 0;font-size:13px}
 </style>
 </head>
@@ -48,6 +51,7 @@
 <div class="wrap">
   <h1>打板模拟跟进 · 每日收益看板</h1>
   <div class="sub" id="sub">加载中…</div>
+  <div class="nav"><a href="./backtest.html">策略回测（云端，可改任意参数）→</a></div>
   <div id="err"></div>
 
   <div class="winbar">

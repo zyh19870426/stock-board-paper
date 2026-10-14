@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>打板策略模拟器（云端版）· 连板接力回测</title>
+<style>
+  :root{
+    --bg:#f4f5f7; --card:#fff; --bd:#e4e7ec; --bd2:#eef0f3;
+    --tx:#1f2328; --tx2:#6b7280; --tx3:#9aa1ab;
+    --up:#d92b2b; --dn:#0a8f3c; --accent:#1a73e8; --warn:#b45309;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--tx);
+    font:13px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;}
+  .wrap{max-width:1280px;margin:0 auto;padding:18px 16px 60px}
+  h1{font-size:19px;margin:0 0 4px;font-weight:650;letter-spacing:.2px}
+  .sub{color:var(--tx2);font-size:12px;margin-bottom:14px}
+  .sub b{color:var(--tx);font-weight:600}
+  .card{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:14px 16px;margin-bottom:12px}
+  .card h2{font-size:13px;margin:0 0 12px;font-weight:650;color:var(--tx);display:flex;align-items:center;gap:8px}
+  .card h2 .tag{font-weight:400;font-size:11px;color:var(--tx3)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:10px 12px}
+  .f{display:flex;flex-direction:column;gap:4px}
+  .f label{font-size:11px;color:var(--tx2);white-space:nowrap}
+  .f input,.f select{border:1px solid var(--bd);border-radius:5px;padding:6px 8px;font-size:13px;background:#fff;color:var(--tx);width:100%;outline:none}
+  .f input:focus,.f select:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(26,115,232,.12)}
+  .f .hint{font-size:10px;color:var(--tx3);line-height:1.3}
+  .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
+  button{border:1px solid var(--bd);background:#fff;color:var(--tx);border-radius:5px;padding:6px 12px;font-size:12px;cursor:pointer}
+  button:hover{background:#f8f9fa;border-color:#cfd4da}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  button.primary:hover{background:#1667d0}
+  .chk{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--tx2);cursor:pointer;user-select:none}
+  .chk input{width:14px;height:14px;accent-color:var(--accent)}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(126px,1fr));gap:10px}
+  .kpi{border:1px solid var(--bd2);border-radius:7px;padding:10px 12px;background:#fcfcfd}
+  .kpi .k{font-size:11px;color:var(--tx2);margin-bottom:3px}
+  .kpi .v{font-size:19px;font-weight:650;letter-spacing:-.2px;font-variant-numeric:tabular-nums}
+  .kpi .x{font-size:10px;color:var(--tx3);margin-top:2px}
+  table{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
+  th,td{padding:6px 8px;text-align:right;border-bottom:1px solid var(--bd2);white-space:nowrap}
+  th{color:var(--tx2);font-weight:600;font-size:11px;background:#fafbfc;position:sticky;top:0;z-index:1}
+  th:first-child,td:first-child,.tl{text-align:left}
+  tbody tr:hover{background:#fafbfc}
+  .scroll{max-height:520px;overflow:auto;border:1px solid var(--bd2);border-radius:6px}
+  .up{color:var(--up)} .dn{color:var(--dn)} .mut{color:var(--tx3)}
+  .pill{display:inline-block;padding:1px 6px;border-radius:4px;font-size:10px;background:#eef2f7;color:#475569}
+  .pill.stop{background:#fdecec;color:#b91c1c}
+  .pill.trail{background:#fff4e5;color:#b45309}
+  .pill.break{background:#eef2f7;color:#475569}
+  .pill.time{background:#eef7ee;color:#166534}
+  .loading{padding:40px;text-align:center;color:var(--tx2)}
+  .err{border:1px solid #f3c9c9;background:#fdf4f4;color:#a02525;border-radius:7px;padding:14px;font-size:12px;line-height:1.7}
+  .flexbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+  .legend{font-size:11px;color:var(--tx3);display:flex;gap:14px}
+  .legend i{display:inline-block;width:10px;height:2px;vertical-align:middle;margin-right:4px}
+  details summary{cursor:pointer;font-size:12px;color:var(--tx2);outline:none}
+  .note{font-size:11px;color:var(--tx3);line-height:1.75;margin-top:10px;padding-top:10px;border-top:1px dashed var(--bd2)}
+  .note code{background:#f3f4f6;padding:0 4px;border-radius:3px;font-size:10px}
+  .pill.open{background:#eef2ff;color:#3730a3}
+  .cfg{border:1px solid var(--bd);border-radius:7px;padding:11px 13px;margin-bottom:9px;background:#fcfcfd}
+  .cfg-h{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
+  .cfg-n{font-size:13px;font-weight:600;color:var(--tx)}
+  .cfg-m{font-size:11px;color:var(--tx3);margin-top:3px;font-variant-numeric:tabular-nums}
+  .cfg-m b{color:var(--tx2);font-weight:600}
+  .cfg-d{font-size:12px;color:var(--tx2);line-height:1.85;margin-top:9px;padding:10px 12px;background:#fff;border:1px solid var(--bd2);border-radius:6px}
+  .cfg-d b{color:var(--tx);font-weight:600}
+  .cfg-w{font-size:11px;color:#8a5a12;line-height:1.8;margin-top:7px;padding:9px 12px;background:#fffbf5;border:1px solid #f5e3c8;border-radius:6px}
+  .cfg-w b{color:var(--warn);font-weight:600}
+  .cfg-w ul{margin:4px 0 0;padding-left:16px}
+  .cfg-w li{margin-bottom:3px}
+  .cfg-b{display:flex;gap:6px;flex-shrink:0}
+  .cfg-b button{padding:4px 10px;font-size:11px}
+  .empty{font-size:12px;color:var(--tx3);padding:6px 0 2px;line-height:1.8}
+  .cfg-name{flex:1;min-width:220px;padding:6px 9px;border:1px solid var(--bd);border-radius:5px;font-size:12px;outline:none;background:#fff;color:var(--tx)}
+  .cfg-name:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(26,115,232,.12)}
+  .cloudbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 10px;font-size:12px}
+  .cloudbar a{color:var(--accent);text-decoration:none;border:1px solid var(--bd);border-radius:5px;padding:4px 10px;background:#fff}
+  .cloudbar a.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .cloudbar .sep{color:var(--tx3)}
+  .cloudbar .note{color:var(--tx3);font-size:11px}
+  .cloudbar code{background:var(--bd2);padding:0 3px;border-radius:3px}
+</style>
+</head>
+<body>
+  <div class="cloudbar">
+    <a href="./">← 每日收益看板</a>
+    <span class="sep">|</span>
+    <a href="./backtest.html" class="on">策略回测（云端）</a>
+    <span class="note">数据集 = 仓库内累积数据集 <code>data/store.json</code>，由每日收盘后的自动任务追加，<b>只增不减</b>；本页与本地「打板策略模拟器」共用同一份引擎源码</span>
+  </div>
+
+<div class="wrap">
+  <h1>打板策略模拟器 · 连板接力回测</h1>
+  <div class="sub" id="metaLine">加载数据中…</div>
+
+  <div id="boot" class="card"><div class="loading">正在加载全市场真实行情数据集…</div></div>
+
+  <div id="app" style="display:none">
+    <div class="card">
+      <h2>策略参数 <span class="tag">改动后自动重算</span></h2>
+      <div class="grid">
+        <div class="f"><label>初始资金（元）</label><input id="p_initialCash" type="number" step="10000" value="100000"></div>
+        <div class="f"><label>资金份数（最大同时持仓）</label><input id="p_slots" type="number" min="1" max="6" step="1" value="2"></div>
+        <div class="f"><label>连板数 &gt;（不含）</label><input id="p_minLbc" type="number" min="0" max="12" step="1" value="2"></div>
+        <div class="f"><label>连板数 &lt;（不含）</label><input id="p_maxLbc" type="number" min="1" max="15" step="1" value="4"><div class="hint">2&lt;板数&lt;4 → 只买 3 板</div></div>
+        <div class="f"><label>止损：亏损 %</label><input id="p_stopLossPct" type="number" min="1" max="30" step="0.5" value="20"></div>
+        <div class="f"><label>止损：回撤 %</label><input id="p_trailPct" type="number" min="1" max="40" step="1" value="20"></div>
+        <div class="f"><label>离场规则（固定）</label><input type="text" value="断板即出 · 收盘未封涨停就卖" disabled></div>
+        <div class="f"><label>最大持有上限（强制离场）</label><input id="p_maxHoldDays" type="number" min="1" max="40" step="1" value="10"></div>
+        <div class="f"><label>同板优先级</label><select id="p_sortBy">
+          <option value="lbc">连板数高优先 → 成交额</option>
+          <option value="amount">成交额高优先</option>
+          <option value="seal">封板强度高优先 → 成交额</option>
+        </select></div>
+        <div class="f"><label>资金分配</label><select id="p_allocMode">
+          <option value="dynamic">动态：可用资金 ÷ 空闲名额</option>
+          <option value="fixed">固定：初始资金 ÷ 份数</option>
+        </select></div>
+        <div class="f"><label>回测区间</label><select id="p_window">
+          <option value="30">最近 30 个交易日</option>
+          <option value="60" selected>最近 60 个交易日</option>
+          <option value="90">最近 90 个交易日</option>
+          <option value="120">最近 120 个交易日</option>
+          <option value="175">最近 175 个交易日（全部可用）</option>
+        </select></div>
+      </div>
+      <div class="row">
+        <label class="chk"><input id="p_skipLimitOpen" type="checkbox" checked>一字涨停开盘放弃买入（真实约束）</label>
+        <label class="chk"><input id="p_trailIntraday" type="checkbox" checked>回撤止损按日内移动止损撮合（推荐）</label>
+        <label class="chk"><input id="p_topOnly" type="checkbox">只买当日最高档连板（抓最高标）</label>
+        <label class="chk"><input id="p_refillOnSkip" type="checkbox">弃买补位（前几名买不进时用下一名顶替）</label>
+        <label class="chk"><input id="p_boardFilter" type="checkbox">含科创板/北交所（20%/30% 涨跌幅）</label>
+        <button id="btnRun" class="primary">重新计算</button>
+        <button id="btnReset">恢复默认</button>
+        <button id="btnCsv">导出交割单 CSV</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>我的配置方案 <span class="tag" id="cfgCount">0 条已保存</span></h2>
+      <div class="row" style="margin:0 0 10px">
+        <input id="cfgName" class="cfg-name" type="text" maxlength="40" placeholder="给这套参数起个名字，例如：四板接力·严止损">
+        <button id="btnSaveCfg" class="primary">保存当前配置</button>
+        <button id="btnExportCfg">导出全部</button>
+        <button id="btnImportCfg">导入</button>
+        <input id="cfgFile" type="file" accept=".json,application/json" style="display:none">
+      </div>
+      <div id="cfgList"></div>
+    </div>
+
+    <div class="card">
+      <h2>运行结果 <span class="tag" id="rangeTag"></span></h2>
+      <div class="kpis" id="kpis"></div>
+    </div>
+
+    <div class="card">
+      <h2>资金曲线 <span class="tag">按每日收盘市值计价</span></h2>
+      <div class="flexbar">
+        <div class="legend"><span><i style="background:#1a73e8"></i>总资产</span><span><i style="background:#c9ced6"></i>初始资金</span><span><i style="background:#f0b429"></i>回撤</span></div>
+        <div class="mut" id="eqHint" style="font-size:11px"></div>
+      </div>
+      <div id="equityChart"></div>
+    </div>
+
+    <div class="card">
+      <h2>交割单 <span class="tag" id="tradeTag"></span></h2>
+      <div class="scroll"><table id="tradeTable"></table></div>
+    </div>
+
+    <div class="card">
+      <h2>卖出原因分布</h2>
+      <div id="reasonTable"></div>
+    </div>
+
+    <div class="card">
+      <details>
+        <summary>弃买记录（一字板无法成交 / 名额已满 等）<span id="skipTag"></span></summary>
+        <div class="scroll" style="margin-top:10px;max-height:300px"><table id="skipTable"></table></div>
+      </details>
+      <div class="note" id="noteBox"></div>
+    </div>
+  </div>
+</div>
+
+<script>window.__DS_URL__='data/store.json'</script>
+<script src="lib/strategy.js"></script>
+<script>
+(function(){
+'use strict'
+var BS = window.BoardSim
+var DS = null
+var $ = function(id){ return document.getElementById(id) }
+
+/* 数据集解析：优先内联（单文件版用 gzip+base64），其次外链 __DS_URL__，最后 dataset.js */
+function resolveDataset(){
+  if(window.__DATASET__ && window.__DATASET__.st) return Promise.resolve(window.__DATASET__)
+  if(window.__DATASET_GZ__){
+    if(typeof DecompressionStream === 'undefined'){
+      return Promise.reject(new Error('当前浏览器不支持 DecompressionStream（需 Chrome/Edge 80+）'))
+    }
+    try{
+      var b64 = window.__DATASET_GZ__
+      var bin = new Uint8Array(b64.length * 3 >> 2)
+      var raw = atob(b64)
+      for(var i=0;i<raw.length;i++) bin[i]=raw.charCodeAt(i)
+      var stream = new Blob([bin]).stream().pipeThrough(new DecompressionStream('gzip'))
+      return new Response(stream).text().then(function(t){ return JSON.parse(t) })
+    }catch(e){ return Promise.reject(e) }
+  }
+  /* 外链数据集：window.__DS_URL__ 或 ?ds=xxx（云端版指向每日自动更新的累积数据集）。
+     放在内联分支之后 → 单文件版的内联数据永远优先，不受影响。 */
+  var dsUrl = window.__DS_URL__ || ((location.search||'').match(/[?&]ds=([^&]*)/)||[])[1]
+  if(dsUrl && typeof fetch === 'function'){
+    var u = decodeURIComponent(dsUrl)
+    return fetch(u, {cache:'no-store'}).then(function(r){
+      if(!r.ok) throw new Error('HTTP ' + r.status + '（' + u + '）')
+      return r.json()
+    })
+  }
+  return Promise.resolve(null)
+}
+
+function fmtMoney(c){ return (c/100).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2}) }
+function fmtPct(x,digits){ var d = digits===undefined?2:digits; return (x*100).toFixed(d)+'%' }
+function signCls(x){ return x>0?'up':(x<0?'dn':'mut') }
+function signed(x,digits){ var d=digits===undefined?2:digits; return (x>0?'+':'')+(x*100).toFixed(d)+'%' }
+
+var PRESET = {initialCash:100000,slots:2,minLbc:2,maxLbc:4,stopLossPct:20,trailPct:20,maxHoldDays:10,sortBy:'lbc',allocMode:'dynamic',skipLimitOpen:true,trailIntraday:true,topOnly:false,refillOnSkip:false,boardFilter:'main',window:60}
+var last = null
+
+/* 封板强度数据：单文件版已内联进数据集；源码版尝试同目录读取 output/seal-map.json（读不到则回退成交额排序） */
+function attachSeal(ds){
+  if(!ds || ds.seal) return Promise.resolve(ds)
+  if(window.__SEAL_MAP__){ ds.seal = window.__SEAL_MAP__; return Promise.resolve(ds) }
+  if(typeof fetch !== 'function') return Promise.resolve(ds)
+  return fetch('data/seal-map.json').then(function(r){ return r.ok ? r.json() : null }).then(function(j){
+    if(j && j.map) ds.seal = j.map
+    return ds
+  }).catch(function(){ return ds })
+}
+
+function boot(){
+  resolveDataset().then(attachSeal).then(function(ds){
+    if(!ds || !ds.st) return fail('未能加载行情数据集。<br>请先执行 <code>node build-dataset.js</code>，或直接打开单文件版「打板策略模拟器.html」。')
+    DS = ds
+    start()
+  }).catch(function(e){
+    fail('数据集加载失败：' + e.message + '<br>' +
+      (window.__DS_URL__ ? '（云端数据集地址：<code>' + window.__DS_URL__ + '</code>，请确认它已随每日任务提交到仓库）'
+                         : '建议直接双击打开单文件版「打板策略模拟器.html」。'))
+  })
+}
+function fail(msg){ $('boot').innerHTML = '<div class="err">' + msg + '</div>'; $('boot').style.display = '' }
+function start(){
+  var m = DS.meta
+  var codes = Object.keys(DS.st).length
+  $('metaLine').innerHTML = '数据源：<b>腾讯日线（不复权）</b> · 覆盖 <b>'+codes+'</b> 只曾连板的个股 · 行情截至 <b>'+m.through+'</b>'+
+    ' · 日历 <b>'+DS.dates.length+'</b> 个交易日 · 回测可用区间 <b>'+DS.dates[DS.warmup]+' ~ '+m.through+'</b>'
+  $('boot').style.display='none'
+  $('app').style.display=''
+  BS.parseDataset(DS); BS.buildBoards(DS, BS.parseDataset(DS))
+  $('noteBox').innerHTML = '<b>口径与已知假设（诚实声明）</b><br>'+
+    '1. 买卖价用<b>真实日线</b>撮合：T 日收盘选出候选，<b>T+1 开盘价</b>成交；止损用当日最高/最低/开盘价判定。<br>'+
+    '1b. ⚠️ <b>A 股 T+1：买入当日不可卖出</b>。所以「断板即出」<b>不看买入当天</b>，而是从<b>买入次日起</b>每个交易日 14:57 看是否封住涨停——没封住才在收盘集合竞价挂单卖出（成交价＝收盘价）。回测严格遵守：<b>0 笔当日买卖</b>，最早卖出为买入后的第 1 个交易日。<br>'+
+    '2. 一字涨停开盘默认<b>放弃买入</b>（现实中打板买不进）；开盘即跌停 / 收盘跌停封死都<b>无法卖出</b>，顺延到下一交易日，直到能成交为止。买卖两端都受此约束。<br>'+
+    '3. 「回撤止损」默认按<b>日内移动止损</b>撮合：当日创出新高后回落幅度达设定值即触发（同一日内高低价差成立与否无法前视，故无未来函数）。关闭后仅用截至昨日的最高价计算回撤线。<br>'+
+    '3b. <b>封板强度</b>＝ 首封时间档位（开盘即封 4 / ≤10:30 为 3 / ≤13:00 为 2 / ≤14:00 为 1 / 尾盘 0）－ 炸板次数惩罚（1 次 −1，2 次 −2，≥3 次 −3），下限 0，共 0~4 分；固定规则、无可调权重。<br>'+
+    '3c. ⚠️ 强度数据的来源与限制：由 <b>5 分钟分时</b>重建，可回溯区间只有 <b>2026-09-09 起</b>（约 18 个选股日），其余交易日<b>无强度数据</b>，会<b>自动回退为成交额排序</b>，因此全区间回测里「强度优先」实际只在那 18 天生效。<br>'+
+    '3d. ⚠️ 实测方向与直觉相反：在这 18 天里，<b>封板越强 → 次日开盘溢价越高</b>（开盘即封组次日平均高开 +3.41%，尾盘板仅 −0.12%，相关性 r=+0.27）。对「<b>T+1 开盘买入</b>」而言，强度高意味着<b>买得更贵</b>，实测强度 4 分组平均 −2.14%、1 分组 +0.22%。而换成「打板口径」（T 日涨停价买入）时方向才反过来：开盘即封组 +3.41% vs 尾盘组 −0.12%。<b>请按自己的买入口径决定要不要用这一项。</b><br>'+
+    '3e. 「弃买补位」默认<b>关闭</b>（前排买不进则名额空过）。开启后用当日下一名顶替。全区间实测：关闭 +65.63%，开启 +37.45%（补位买入 4 笔平均 −9.39%，但 30/60/90 日窗口开启后反而略好，说明差异主要来自路径分歧而非稳定的「垃圾票」效应，样本太小无法定性）。<br>'+
+    '4. 数据为<b>不复权</b>口径，涨停判定精确；回测窗口内个股除权稀少，未做复权还原。<br>'+
+    '5. 已排除 ST / 退市 / 上市不足 20 个交易日的票；含主板与创业板（20% 涨跌幅口径自动识别）。<br>'+
+    '6. 费用：佣金万 2.5（最低 5 元）+ 印花税卖出千 0.5 + 过户费十万分之 1，买卖双边计入。<br>'+
+    '7. 连续<b>一字跌停</b>时挂单无法成交，止损会被动延迟（回测已模拟该情形）——这是打板策略最极端的下行风险，单笔亏损可远超 5%。<br>'+
+    '8. 全部为<b>事后回放</b>，不含未来函数；但不构成任何投资建议。'
+  bind()
+  run()
+}
+
+function readParams(){
+  var w = parseInt($('p_window').value,10)
+  var end = DS.dates.length-1
+  return {
+    initialCash: Math.max(1000, Number($('p_initialCash').value)||100000),
+    slots: Math.max(1, Math.min(6, Number($('p_slots').value)||2)),
+    minLbc: Math.max(0, Number($('p_minLbc').value)||0),
+    maxLbc: Math.max(1, Number($('p_maxLbc').value)||4),
+    stopLossPct: Math.max(0.5, Number($('p_stopLossPct').value)||20),
+    trailPct: Math.max(1, Number($('p_trailPct').value)||20),
+    exitMode: 'break',
+    maxHoldDays: Math.max(1, Number($('p_maxHoldDays').value)||10),
+    sortBy: $('p_sortBy').value,
+    allocMode: $('p_allocMode').value,
+    refillOnSkip: $('p_refillOnSkip').checked,
+    minSealScore: null,
+    skipLimitOpen: $('p_skipLimitOpen').checked,
+    trailIntraday: $('p_trailIntraday').checked,
+    topOnly: $('p_topOnly').checked,
+    boardFilter: $('p_boardFilter').checked ? 'all':'main',
+    endIdx: end,
+    startIdx: Math.max(DS.warmup, end-w+1)
+  }
+}
+
+function bind(){
+  var ids=['p_initialCash','p_slots','p_minLbc','p_maxLbc','p_stopLossPct','p_trailPct','p_maxHoldDays','p_sortBy','p_allocMode','p_window','p_skipLimitOpen','p_trailIntraday','p_topOnly','p_refillOnSkip','p_boardFilter']
+  var timer=null
+  ids.forEach(function(id){
+    $(id).addEventListener('input',function(){ clearTimeout(timer); timer=setTimeout(run,260) })
+    $(id).addEventListener('change',function(){ clearTimeout(timer); timer=setTimeout(run,60) })
+  })
+  $('btnRun').onclick=run
+  $('btnReset').onclick=function(){
+    $('p_initialCash').value=PRESET.initialCash; $('p_slots').value=PRESET.slots
+    $('p_minLbc').value=PRESET.minLbc; $('p_maxLbc').value=PRESET.maxLbc
+    $('p_stopLossPct').value=PRESET.stopLossPct; $('p_trailPct').value=PRESET.trailPct
+    $('p_maxHoldDays').value=PRESET.maxHoldDays; $('p_sortBy').value=PRESET.sortBy
+    $('p_allocMode').value=PRESET.allocMode; $('p_window').value=PRESET.window
+    $('p_skipLimitOpen').checked=PRESET.skipLimitOpen; $('p_trailIntraday').checked=PRESET.trailIntraday
+    $('p_topOnly').checked=PRESET.topOnly; $('p_boardFilter').checked=false
+    $('p_refillOnSkip').checked=false
+    run()
+  }
+  $('btnCsv').onclick=exportCsv
+  $('btnSaveCfg').onclick=cfgSave
+  $('btnExportCfg').onclick=cfgExport
+  $('btnImportCfg').onclick=function(){ $('cfgFile').click() }
+  $('cfgFile').onchange=cfgImport
+  cfgRender()
+}
+
+/* ================= 配置方案：保存 / 口语化描述 / 载入 ================= */
+var CFG_KEY = 'board-sim-cfgs-v1'
+
+function cfgAll(){
+  try{ return JSON.parse(localStorage.getItem(CFG_KEY) || '[]') }catch(e){ return [] }
+}
+function cfgStore(list){
+  try{ localStorage.setItem(CFG_KEY, JSON.stringify(list)); return true }
+  catch(e){ alert('保存失败：当前环境禁用了本地存储（localStorage）。可改用「导出全部」把配置存成文件。'); return false }
+}
+function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c] }) }
+function pad2(n){ return (n<10?'0':'')+n }
+function fmtTs(iso){
+  var d = new Date(iso)
+  if(isNaN(d.getTime())) return '—'
+  return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate())+' '+pad2(d.getHours())+':'+pad2(d.getMinutes())
+}
+function money2(n){ return Number(n).toLocaleString('zh-CN') }
+function lbcRange(P){
+  var lo = P.minLbc+1, hi = P.maxLbc-1
+  if(hi < lo) return null
+  return lo===hi ? (lo+' 板') : (lo+'~'+hi+' 板')
+}
+
+/* 把参数翻译成一段人话操作说明 */
+function humanize(P, s){
+  var o = [], rng = lbcRange(P)
+  o.push('本金 <b>'+money2(P.initialCash)+' 元</b>，切成 <b>'+P.slots+' 份</b>，'
+    + (P.allocMode==='fixed' ? '每份固定为初始资金的 1/'+P.slots+'。' : '每份按当时剩下的现金动态均分。'))
+  if(rng){
+    o.push('每天收盘后，从全市场里挑<b>连板 '+rng+'</b>的票'+(P.topOnly?'（只保留当日最高那一档，其余档位不要）':'')
+      + (P.sortBy==='seal' ? '，按<b>封板强度</b>从高到低排（开盘就封住的最强，越晚封、炸板越多的越弱），强度一样再看成交额'
+        : (P.sortBy==='lbc' ? '，连板数高的优先，连板数一样再看谁成交额大' : '，按成交额从大到小排'))
+      + '，最多同时拿 '+P.slots+' 只。')
+  }else{
+    o.push('<b>注意：连板下限不小于上限，这个区间是空的，跑不出任何一笔交易。</b>')
+  }
+  o.push('选中的票，在<b>第二天开盘时买入</b>。'
+    + (P.skipLimitOpen ? '如果第二天直接一字涨停开盘，就放弃这只——现实里买不进，不追。' : '即使一字涨停开盘也照价买入（已关闭现实约束）。'))
+  if(P.refillOnSkip){
+    o.push('如果被放弃的那只本来排在前面，就<b>从当天候选里往下顺延，用下一名的票顶上</b>，尽量把名额填满。')
+  }else{
+    o.push('这只放弃之后，<b>当天这个名额就空着</b>，不会去找后面的票来凑数。')
+  }
+  o.push('拿着的时候盯着两条线：亏到 <b>'+P.stopLossPct+'%</b> 砍掉，或者从买入后的最高价回撤 <b>'+P.trailPct+'%</b> 也砍掉。'
+    + (P.trailIntraday ? '回撤线用当天的最高价实时重算，等于挂了一张移动止损单。' : '回撤线只用截至昨天的最高价，当天不再上移。'))
+  o.push('注意<b>买入当天不能卖</b>（A 股 T+1），所以判断从<b>买入次日起</b>开始：每个交易日 14:57 看有没有封住涨停——没封住，就在收盘集合竞价里挂单卖掉（<b>成交价＝当日收盘价</b>）；封住了，继续拿着等下一个涨停。')
+  o.push('另外设了个硬上限：最多拿 <b>'+P.maxHoldDays+' 个交易日</b>，到点无条件走人，防止无限期扛着。')
+  return o.join('')
+}
+
+/* 根据参数和本次回测的真实结果，生成注意事项 */
+function cautions(P, s, r){
+  var W = [], rng = lbcRange(P), lbcLo = P.minLbc+1
+  if(s.tradeCount < 40){
+    W.push('这套参数在本区间只跑出 <b>'+s.tradeCount+' 笔</b>交易，样本偏少。收益率很容易被一两笔极端盈亏带偏，别把它当成可复制的期望值。')
+  }
+  if(P.stopLossPct <= 6 && lbcLo >= 4){
+    W.push('<b>'+P.stopLossPct+'% 的止损线对 '+lbcLo+' 板这种高位票偏紧。</b>这类票次日低开 3~5% 是常态，止损经常在开盘一瞬间就被跳空打穿，真实成交亏幅会明显大于 '+P.stopLossPct+'%——止损从「控制风险」变成「固定割肉」。')
+  }
+  var jump = 0, jumpPnl = 0
+  ;(r.trades||[]).forEach(function(t){
+    if(t.reason && t.reason.indexOf('开盘跳空') >= 0){ jump++; jumpPnl += t.pnlC }
+  })
+  if(jump) W.push('本次回测有 <b>'+jump+' 笔</b>是开盘直接跳空击穿止损出场的，合计 <b>'+fmtMoney(jumpPnl)+' 元</b>——这类交易是本策略最主要的亏损来源。')
+  if(P.skipLimitOpen) W.push('一字涨停开盘的票被系统性跳过（本次 '+s.failOpenCount+' 次），意味着最强的标的缺席，真实收益方向不确定，偏差既可能为正也可能为负。')
+  if(s.returnPct < 0){
+    W.push('这套参数在当前区间的总收益是 <b>'+fmtPct(s.returnPct,1)+'</b>，是亏的。保存它主要是留档做横向对比，不代表它可用。')
+  }else{
+    W.push('这套参数在当前区间是 <b>'+fmtPct(s.returnPct,1)+'</b>。先确认它不是靠一两笔极端盈利撑起来的——去交割单看看盈亏分布，再看最大回撤能不能接受。')
+  }
+  W.push('回测区间 '+s.startDate+' ~ '+s.endDate+'（'+s.days+' 个交易日）。换个市场环境结论可能完全反过来，参数不要跨区间照搬。')
+  W.push('撮合按开盘价 / 触发价理想成交，<b>没有计滑点</b>；断板卖出按<b>收盘集合竞价统一价（＝收盘价）</b>成交——14:57 挂的单在集合竞价里不可撤，实际能不能成交、成交在什么价都要看当时的买卖盘。')
+  return W
+}
+
+function cfgSave(){
+  if(!last || !last.summary){ alert('回测还没跑完，稍等一下再保存。'); return }
+  var P = readParams()
+  P.window = parseInt($('p_window').value,10)
+  var s = last.summary
+  var name = ($('cfgName').value || '').trim() || ('配置 ' + (cfgAll().length + 1))
+  var rec = {
+    id: 'c' + Date.now().toString(36),
+    name: name,
+    ts: new Date().toISOString(),
+    params: P,
+    stats: {
+      returnPct: s.returnPct, winRate: s.winRate, tradeCount: s.tradeCount,
+      finalC: s.finalC, initialC: s.initialC, maxDrawdown: s.maxDrawdown,
+      avgHoldDays: s.avgHoldDays, days: s.days, startDate: s.startDate,
+      endDate: s.endDate, failOpenCount: s.failOpenCount
+    },
+    desc: humanize(P, s),
+    notes: cautions(P, s, last)
+  }
+  var list = cfgAll(); list.unshift(rec)
+  if(!cfgStore(list)) return
+  $('cfgName').value = ''
+  cfgRender()
+}
+
+function cfgDelete(id){
+  var list = cfgAll(), c = list.filter(function(x){ return x.id===id })[0]
+  if(!c) return
+  if(!confirm('删除配置「'+c.name+'」？删除后不可恢复（如已导出文件可再导入）。')) return
+  cfgStore(list.filter(function(x){ return x.id!==id }))
+  cfgRender()
+}
+
+function cfgApply(id){
+  var c = cfgAll().filter(function(x){ return x.id===id })[0]
+  if(!c) return
+  var p = c.params || {}
+  $('p_initialCash').value = p.initialCash!=null?p.initialCash:100000
+  $('p_slots').value = p.slots||2
+  $('p_minLbc').value = p.minLbc!=null?p.minLbc:2
+  $('p_maxLbc').value = p.maxLbc!=null?p.maxLbc:4
+  $('p_stopLossPct').value = p.stopLossPct||20
+  $('p_trailPct').value = p.trailPct||20
+  /* 离场规则已固定为「断板即出」、封板强度过滤已下线：老配置里的 exitMode / holdDays / minSealScore 一律忽略 */
+  $('p_maxHoldDays').value = p.maxHoldDays||10
+  $('p_sortBy').value = p.sortBy||'lbc'
+  $('p_allocMode').value = p.allocMode||'dynamic'
+  $('p_refillOnSkip').checked = !!p.refillOnSkip
+  $('p_window').value = p.window||60
+  $('p_skipLimitOpen').checked = p.skipLimitOpen!==false
+  $('p_trailIntraday').checked = p.trailIntraday!==false
+  $('p_topOnly').checked = !!p.topOnly
+  $('p_boardFilter').checked = (p.boardFilter==='all')
+  $('cfgName').value = c.name
+  run()
+  try{ window.scrollTo({top:0,behavior:'smooth'}) }catch(e){ window.scrollTo(0,0) }
+}
+
+function cfgRender(){
+  var list = cfgAll()
+  $('cfgCount').textContent = list.length + ' 条已保存'
+  if(!list.length){
+    $('cfgList').innerHTML = '<div class="empty">还没有保存过配置。调出一组你满意的参数后，在上面填个名字点「保存当前配置」，这里会生成一条记录：<b>口语化的操作说明 + 基于本次回测的注意事项</b>。数据存在浏览器本地，换浏览器或清缓存会丢，建议定期「导出全部」备份成文件。</div>'
+    return
+  }
+  $('cfgList').innerHTML = list.map(function(c){
+    var st = c.stats || {}
+    var cls = st.returnPct>0?'up':(st.returnPct<0?'dn':'mut')
+    return '<div class="cfg">'
+      + '<div class="cfg-h"><div>'
+      +   '<div class="cfg-n">'+esc(c.name)+'</div>'
+      +   '<div class="cfg-m">保存于 '+fmtTs(c.ts)+' · 总收益 <b class="'+cls+'">'+signed(st.returnPct||0,1)+'</b>'
+      +   ' · 成功率 <b>'+fmtPct(st.winRate||0,1)+'</b> · '+st.tradeCount+' 笔 · 平均持有 '+(st.avgHoldDays?st.avgHoldDays.toFixed(1):'0')+' 日</b>'
+      +   ' · 区间 '+(st.startDate||'')+' ~ '+(st.endDate||'')+'</div>'
+      + '</div><div class="cfg-b">'
+      +   '<button data-apply="'+c.id+'">载入这套</button>'
+      +   '<button data-del="'+c.id+'">删除</button>'
+      + '</div></div>'
+      + '<div class="cfg-d">'+ (c.desc||'') +'</div>'
+      + '<div class="cfg-w"><b>注意事项（按本次回测的真实数据生成）</b><ul>'
+      + (c.notes||[]).map(function(n){ return '<li>'+n+'</li>' }).join('')
+      + '</ul></div></div>'
+  }).join('')
+  Array.prototype.forEach.call($('cfgList').querySelectorAll('[data-apply]'), function(b){
+    b.onclick = function(){ cfgApply(b.getAttribute('data-apply')) }
+  })
+  Array.prototype.forEach.call($('cfgList').querySelectorAll('[data-del]'), function(b){
+    b.onclick = function(){ cfgDelete(b.getAttribute('data-del')) }
+  })
+}
+
+function cfgExport(){
+  var list = cfgAll()
+  if(!list.length){ alert('还没有保存过配置。'); return }
+  var blob = new Blob([JSON.stringify({ app:'board-sim', version:1, exported:new Date().toISOString(), configs:list }, null, 2)], {type:'application/json'})
+  var a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = '打板策略配置-' + new Date().toISOString().slice(0,10) + '.json'
+  document.body.appendChild(a); a.click()
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove() }, 500)
+}
+
+function cfgImport(ev){
+  var f = ev.target.files && ev.target.files[0]
+  if(!f) return
+  var reader = new FileReader()
+  reader.onload = function(){
+    try{
+      var j = JSON.parse(reader.result)
+      var incoming = Array.isArray(j) ? j : (j.configs || [])
+      if(!incoming.length){ alert('文件里没有配置记录。'); return }
+      var list = cfgAll(), ids = {}
+      list.forEach(function(x){ ids[x.id]=1 })
+      var added = 0
+      incoming.forEach(function(c){
+        if(!c || !c.params) return
+        if(!c.id || ids[c.id]) c.id = 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2,5)
+        ids[c.id]=1; list.push(c); added++
+      })
+      if(cfgStore(list)){ cfgRender(); alert('已导入 '+added+' 条配置。') }
+    }catch(e){ alert('导入失败：不是合法的配置文件。' + e.message) }
+    ev.target.value = ''
+  }
+  reader.readAsText(f, 'utf-8')
+}
+
+function run(){
+  var t0=performance.now()
+  var P=readParams()
+  var r=BS.runBacktest(DS,P)
+  if(r.error){ $('kpis').innerHTML='<div class="err">'+r.error+'</div>'; return }
+  last=r
+  var s=r.summary
+  $('rangeTag').textContent = s.startDate+' ~ '+s.endDate+'（'+s.days+' 个交易日）'
+  $('tradeTag').textContent = '共 '+s.tradeCount+' 笔已平仓'+(s.openPositions?'，'+s.openPositions+' 笔未平仓':'')
+  $('eqHint').textContent = '计算耗时 '+(performance.now()-t0).toFixed(0)+' ms'
+
+  var kpi=[
+    ['期末总资产','¥'+fmtMoney(s.finalC),'初始 ¥'+fmtMoney(s.initialC),''],
+    ['总收益率',signed(s.returnPct),'¥'+fmtMoney(s.finalC-s.initialC),signCls(s.returnPct)],
+    ['成功率',fmtPct(s.winRate,1),s.winCount+' 胜 / '+s.lossCount+' 负',''],
+    ['交易次数',s.tradeCount,'日均 '+(s.tradeCount/Math.max(1,s.days)).toFixed(2)+' 笔',''],
+    ['平均单笔',signed(s.avgPnlPct),'盈亏比 '+(s.profitFactor===Infinity?'∞':s.profitFactor.toFixed(2)),signCls(s.avgPnlPct)],
+    ['平均盈利',signed(s.avgWinPct),'最大 '+signed(s.maxWinPct),'up'],
+    ['平均亏损',signed(s.avgLossPct),'最大 '+signed(s.maxLossPct),'dn'],
+    ['最大回撤','-'+fmtPct(s.maxDrawdown,1),'峰值起算','dn'],
+    ['平均持有',s.avgHoldDays.toFixed(1)+' 日','上限 '+P.maxHoldDays+' 日',''],
+    ['弃买次数',s.skippedCount,'其中一字板 '+s.failOpenCount,'mut']
+  ]
+  $('kpis').innerHTML = kpi.map(function(k){
+    return '<div class="kpi"><div class="k">'+k[0]+'</div><div class="v '+k[3]+'">'+k[1]+'</div><div class="x">'+k[2]+'</div></div>'
+  }).join('')
+
+  drawEquity(r.equity, s.initialC)
+  drawTrades(r.trades, r.openPositions, s)
+  drawReasons(r.trades)
+  drawSkips(r.skipped)
+}
+
+function drawEquity(eq, initC){
+  if(!eq.length){ $('equityChart').innerHTML='<div class="mut">无数据</div>'; return }
+  var W=1240,H=280,pad={l:64,r:16,t:12,b:26}
+  var vals=eq.map(function(e){return e.totalC})
+  var lo=Math.min.apply(null,vals.concat([initC])), hi=Math.max.apply(null,vals.concat([initC]))
+  var span=(hi-lo)||1; lo-=span*0.06; hi+=span*0.06
+  var iw=W-pad.l-pad.r, ih=H-pad.t-pad.b
+  var X=function(i){ return pad.l + (eq.length<2?iw/2:iw*i/(eq.length-1)) }
+  var Y=function(v){ return pad.t + ih*(1-(v-lo)/(hi-lo)) }
+
+  var line=eq.map(function(e,i){return (i?'L':'M')+X(i).toFixed(1)+' '+Y(e.totalC).toFixed(1)}).join(' ')
+  var area=line+' L'+X(eq.length-1).toFixed(1)+' '+Y(lo).toFixed(1)+' L'+X(0).toFixed(1)+' '+Y(lo).toFixed(1)+' Z'
+  var y0=Y(initC).toFixed(1)
+
+  // 网格 + y 轴
+  var grid='', labs=''
+  for(var g=0;g<=4;g++){
+    var v=lo+(hi-lo)*g/4, y=Y(v).toFixed(1)
+    grid+='<line x1="'+pad.l+'" y1="'+y+'" x2="'+(W-pad.r)+'" y2="'+y+'" stroke="#eef0f3" stroke-width="1"/>'
+    labs+='<text x="'+(pad.l-8)+'" y="'+(+y+3.5)+'" font-size="10" fill="#9aa1ab" text-anchor="end">'+(v/100).toFixed(0)+'</text>'
+  }
+  // x 轴日期
+  var n=eq.length, ticks=[]
+  var step=Math.max(1,Math.floor(n/7))
+  for(var i=0;i<n;i+=step) ticks.push(i)
+  if(ticks[ticks.length-1]!==n-1) ticks.push(n-1)
+  var xl=ticks.map(function(i){
+    return '<text x="'+X(i).toFixed(1)+'" y="'+(H-8)+'" font-size="10" fill="#9aa1ab" text-anchor="middle">'+eq[i].date.slice(5)+'</text>'
+  }).join('')
+
+  // 主轴路径只画空 svg，hover 由叠加层处理
+  var svg='<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="'+H+'" style="display:block;overflow:visible" preserveAspectRatio="none">'
+    +'<defs><linearGradient id="ga" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1a73e8" stop-opacity="0.16"/><stop offset="100%" stop-color="#1a73e8" stop-opacity="0"/></linearGradient></defs>'
+    +grid
+    +'<path d="'+area+'" fill="url(#ga)"/>'
+    +'<line x1="'+pad.l+'" y1="'+y0+'" x2="'+(W-pad.r)+'" y2="'+y0+'" stroke="#c9ced6" stroke-width="1" stroke-dasharray="4 3"/>'
+    +'<path d="'+line+'" fill="none" stroke="#1a73e8" stroke-width="1.8" stroke-linejoin="round"/>'
+    +'<line id="eqGuide" x1="0" y1="'+pad.t+'" x2="0" y2="'+(H-pad.b)+'" stroke="#c9ced6" stroke-width="1" opacity="0"/>'
+    +'<circle id="eqDot" r="3.5" fill="#1a73e8" stroke="#fff" stroke-width="1.5" opacity="0"/>'
+    +labs+xl+'</svg>'
+  $('equityChart').innerHTML=svg
+
+  var host=$('equityChart'), svgEl=host.querySelector('svg')
+  var tip=document.createElement('div')
+  tip.style.cssText='position:absolute;pointer-events:none;background:#1f2328;color:#fff;font-size:11px;padding:5px 8px;border-radius:5px;opacity:0;transition:opacity .1s;white-space:nowrap;z-index:5'
+  host.style.position='relative'; host.appendChild(tip)
+  svgEl.addEventListener('mousemove',function(ev){
+    var rect=svgEl.getBoundingClientRect()
+    var px=(ev.clientX-rect.left)/rect.width*W
+    var i=Math.round((px-pad.l)/iw*(eq.length-1))
+    i=Math.max(0,Math.min(eq.length-1,i))
+    var e=eq[i]
+    var gx=X(i), gy=Y(e.totalC)
+    var g=document.getElementById('eqGuide'), d=document.getElementById('eqDot')
+    g.setAttribute('x1',gx); g.setAttribute('x2',gx); g.setAttribute('opacity','1')
+    d.setAttribute('cx',gx); d.setAttribute('cy',gy); d.setAttribute('opacity','1')
+    var ret=e.totalC/initC-1
+    tip.innerHTML=e.date+'　总资产 ¥'+fmtMoney(e.totalC)+'　<span style="color:'+(ret>=0?'#ff8a8a':'#7ee2a8')+'">'+(ret>0?'+':'')+(ret*100).toFixed(2)+'%</span>　持仓 '+e.pos+' 只'
+    tip.style.left=Math.min(rect.width-10,(gx/W)*rect.width)+'px'
+    tip.style.top=Math.max(0,(gy/H)*rect.height-34)+'px'
+    tip.style.opacity='1'
+  })
+  svgEl.addEventListener('mouseleave',function(){
+    tip.style.opacity='0'
+    document.getElementById('eqGuide').setAttribute('opacity','0')
+    document.getElementById('eqDot').setAttribute('opacity','0')
+  })
+}
+
+function drawTrades(tr, open, s){
+  var h='<thead><tr><th>#</th><th>代码</th><th class="tl">名称</th><th>板数</th><th>买入日</th><th>买入价</th><th>股数</th><th>买入金额</th><th>卖出日</th><th>卖出价</th><th>卖出金额</th><th>费用</th><th>净盈亏</th><th>收益率</th><th>持有</th><th class="tl">卖出原因</th></tr></thead><tbody>'
+  if(!tr.length){ h+='<tr><td colspan="16" class="mut" style="text-align:center;padding:22px">回测区间内没有符合「'+P_rangeText()+'」的成交。可放宽连板区间或延长回测窗口。</td></tr>' }
+  tr.forEach(function(t){
+    var cls=signCls(t.pnlC)
+    h+='<tr>'
+      +'<td class="mut">'+t.seq+'</td>'
+      +'<td>'+t.code+'</td><td class="tl">'+t.name+'</td>'
+      +'<td><span class="pill">'+t.lbc+'板</span></td>'
+      +'<td class="mut">'+t.buyDate.slice(2)+'</td>'
+      +'<td>'+(t.buyC/100).toFixed(2)+'</td>'
+      +'<td>'+t.shares+'</td>'
+      +'<td class="mut">'+(t.buyAmountC/100).toFixed(0)+'</td>'
+      +'<td class="mut">'+t.sellDate.slice(2)+'</td>'
+      +'<td>'+(t.sellC/100).toFixed(2)+'</td>'
+      +'<td class="mut">'+(t.sellAmountC/100).toFixed(0)+'</td>'
+      +'<td class="mut">'+((t.buyFeeC+t.sellFeeC)/100).toFixed(2)+'</td>'
+      +'<td class="'+cls+'">'+(t.pnlC/100>=0?'+':'')+(t.pnlC/100).toFixed(2)+'</td>'
+      +'<td class="'+cls+'">'+signed(t.pnlPct)+'</td>'
+      +'<td class="mut">'+t.holdDays+'日</td>'
+      +'<td class="tl"><span class="pill '+(t.tag||'')+'">'+t.reason+'</span></td>'
+    +'</tr>'
+  })
+  open.forEach(function(p,i){
+    h+='<tr style="background:#fffdf5">'
+      +'<td class="mut">开</td><td>'+p.code+'</td><td class="tl">'+p.name+'</td>'
+      +'<td><span class="pill">'+p.lbc+'板</span></td>'
+      +'<td class="mut">'+p.buyDate.slice(2)+'</td><td>'+(p.buyC/100).toFixed(2)+'</td><td>'+p.shares+'</td>'
+      +'<td class="mut">'+(p.costC/100).toFixed(0)+'</td><td colspan="8" class="tl mut">回测结束时仍持有</td>'
+    +'</tr>'
+  })
+  h+='</tbody>'
+  $('tradeTable').innerHTML=h
+}
+function P_rangeText(){
+  var mn=Number($('p_minLbc').value),mx=Number($('p_maxLbc').value)
+  return mn+' < 连板 < '+mx
+}
+
+function drawReasons(tr){
+  var map={}
+  tr.forEach(function(t){ var k=t.tag||'other'; map[k]=map[k]||{n:0,pnl:0,pct:0,label:t.reason}; map[k].n++; map[k].pnl+=t.pnlC; map[k].pct+=t.pnlPct })
+  var keys=Object.keys(map).sort(function(a,b){return map[b].n-map[a].n})
+  var h='<div class="scroll"><table><thead><tr><th class="tl">卖出原因</th><th>笔数</th><th>占比</th><th>累计净盈亏</th><th>平均收益率</th></tr></thead><tbody>'
+  if(!keys.length) h+='<tr><td colspan="5" class="mut" style="text-align:center;padding:16px">—</td></tr>'
+  keys.forEach(function(k){
+    var m=map[k], avg=m.pct/m.n
+    h+='<tr><td class="tl"><span class="pill '+k+'">'+m.label+'</span></td><td>'+m.n+'</td>'
+      +'<td class="mut">'+(m.n/tr.length*100).toFixed(1)+'%</td>'
+      +'<td class="'+signCls(m.pnl)+'">'+(m.pnl/100>=0?'+':'')+(m.pnl/100).toFixed(2)+'</td>'
+      +'<td class="'+signCls(avg)+'">'+signed(avg)+'</td></tr>'
+  })
+  h+='</tbody></table></div>'
+  $('reasonTable').innerHTML=h
+}
+
+function drawSkips(sk){
+  var h='<thead><tr><th class="tl">日期</th><th>代码</th><th class="tl">名称</th><th>板数</th><th class="tl">原因</th></tr></thead><tbody>'
+  if(!sk.length) h+='<tr><td colspan="5" class="mut" style="text-align:center;padding:16px">无弃买记录</td></tr>'
+  sk.slice(0,400).forEach(function(s){
+    h+='<tr><td class="tl mut">'+s.date+'</td><td>'+s.code+'</td><td class="tl">'+s.name+'</td><td><span class="pill">'+s.lbc+'板</span></td><td class="tl mut">'+s.reason+'</td></tr>'
+  })
+  if(sk.length>400) h+='<tr><td colspan="5" class="mut" style="text-align:center">… 其余 '+(sk.length-400)+' 条略</td></tr>'
+  h+='</tbody>'
+  $('skipTable').innerHTML=h
+  $('skipTag').textContent=' 共 '+sk.length+' 次'
+}
+
+function exportCsv(){
+  if(!last || !last.trades.length){ alert('暂无可导出的成交记录'); return }
+  var head=['序号','代码','名称','买入时连板','买入日期','买入价','买入股数','买入金额','买入费用','卖出日期','卖出价','卖出金额','卖出费用','净盈亏','收益率','持有交易日','卖出原因']
+  var lines=[head.join(',')]
+  last.trades.forEach(function(t){
+    lines.push([t.seq,t.code,'"'+t.name+'"',t.lbc,t.buyDate,(t.buyC/100).toFixed(2),t.shares,(t.buyAmountC/100).toFixed(2),(t.buyFeeC/100).toFixed(2),
+      t.sellDate,(t.sellC/100).toFixed(2),(t.sellAmountC/100).toFixed(2),(t.sellFeeC/100).toFixed(2),
+      (t.pnlC/100).toFixed(2),(t.pnlPct*100).toFixed(3)+'%',t.holdDays,'"'+t.reason+'"'].join(','))
+  })
+  var blob=new Blob(['\ufeff'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'})
+  var a=document.createElement('a')
+  a.href=URL.createObjectURL(blob)
+  a.download='打板策略交割单_'+last.summary.startDate+'_'+last.summary.endDate+'.csv'
+  a.click()
+  setTimeout(function(){URL.revokeObjectURL(a.href)},2000)
+}
+
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot); else boot()
+})()
+</script>
+</body>
+</html>

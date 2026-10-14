@@ -245,7 +245,7 @@ async function main () {
   let store
   if (RESEED || !fs.existsSync(STORE_FILE)) {
     if (!fs.existsSync(LOCAL_DATASET)) throw new Error('缺少种子数据集：' + LOCAL_DATASET + '（请在开发机先跑 build-dataset.js，或提交一份 data/store.json）')
-    store = ST.initFromDataset(LOCAL_DATASET, 90)
+    store = ST.initFromDataset(LOCAL_DATASET, 0)   // 0 = 保留全部历史（云端回测要跑长窗口）
     console.log('  数据集：从 ' + LOCAL_DATASET + ' 播种 ' + store.dates.length + ' 天 / ' + Object.keys(store.st).length + ' 只票')
   } else {
     store = ST.load(STORE_FILE)
