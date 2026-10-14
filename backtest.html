@@ -256,8 +256,9 @@ function fail(msg){ $('boot').innerHTML = '<div class="err">' + msg + '</div>'; 
 function start(){
   var m = DS.meta
   var codes = Object.keys(DS.st).length
-  $('metaLine').innerHTML = '数据源：<b>腾讯日线（不复权）</b> · 覆盖 <b>'+codes+'</b> 只曾连板的个股 · 行情截至 <b>'+m.through+'</b>'+
-    ' · 日历 <b>'+DS.dates.length+'</b> 个交易日 · 回测可用区间 <b>'+DS.dates[DS.warmup]+' ~ '+m.through+'</b>'
+  var thru = m.through || m.lastDate || DS.dates[DS.dates.length-1]   // 云端累积数据集用 lastDate
+  $('metaLine').innerHTML = '数据源：<b>腾讯日线（不复权）</b> · 覆盖 <b>'+codes+'</b> 只曾连板的个股 · 行情截至 <b>'+thru+'</b>'+
+    ' · 日历 <b>'+DS.dates.length+'</b> 个交易日 · 回测可用区间 <b>'+DS.dates[DS.warmup]+' ~ '+thru+'</b>'
   $('boot').style.display='none'
   $('app').style.display=''
   BS.parseDataset(DS); BS.buildBoards(DS, BS.parseDataset(DS))
