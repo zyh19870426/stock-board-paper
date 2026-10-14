@@ -47,6 +47,26 @@
         "topOnly": false,
         "boardFilter": "main"
       }
+    },
+    {
+      "id": "S3",
+      "name": "配置 1",
+      "params": {
+        "slots": 1,
+        "minLbc": 0,
+        "maxLbc": 2,
+        "stopLossPct": 20,
+        "trailPct": 20,
+        "exitMode": "break",
+        "maxHoldDays": 10,
+        "sortBy": "lbc",
+        "allocMode": "dynamic",
+        "refillOnSkip": false,
+        "skipLimitOpen": true,
+        "trailIntraday": true,
+        "topOnly": false,
+        "boardFilter": "main"
+      }
     }
   ]
 }
