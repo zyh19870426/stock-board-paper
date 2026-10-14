@@ -6,7 +6,7 @@ const fs = require('fs')
 const path = require('path')
 const crypto = require('crypto')
 
-const SRC = path.join(__dirname, '..', '..', 'lib', 'strategy.js')
+const SRC = path.join(__dirname, '..', 'lib', 'strategy.js')
 const DST = path.join(__dirname, 'lib', 'strategy.js')
 
 if (!fs.existsSync(SRC)) { console.error('找不到源引擎：' + SRC); process.exit(1) }

@@ -205,9 +205,13 @@ function buildReport (date, results, meta) {
 
   L.push('---')
   L.push('')
-  L.push('口径：T 日收盘选股 → T+1 开盘价买入（一字涨停开盘弃买）→ 断板即出 / 亏损 ' +
+  L.push('口径：T 日收盘选股 → T+1 开盘价买入（一字涨停开盘弃买）→ 断板即出（**14:57 判定，未封则在收盘集合竞价卖出，成交价＝收盘价**）/ 亏损 ' +
     results.map(r => r.params.stopLossPct + '%').join('、') + ' 止损 / 回撤 ' + results.map(r => r.params.trailPct + '%').join('、') +
     ' 止损 / 最长持有 ' + results.map(r => r.params.maxHoldDays).join('、') + ' 个交易日。')
+  L.push('')
+  L.push('> 卖出时点说明：A 股 14:57–15:00 为收盘集合竞价，**该阶段成交的统一价就是当日收盘价**，且期间不可撤单。' +
+    '所以「14:57 看未封板 → 挂单卖出」的成交价与回测用的收盘价一致；这是唯一真实可执行的做法（15:00 收盘价产生时已无法下单）。' +
+    '收盘跌停封死 / 开盘一字跌停 → 卖不出，顺延到下一交易日。')
   L.push('')
   L.push('⚠️ 模拟盘按开盘价 / 触发价理想成交，**未计滑点与冲击成本**；不构成投资建议。')
   return L.join('\n')
@@ -310,7 +314,7 @@ async function main () {
       startDate: cfg.startDate, initialCash: cfg.initialCash,
       strategies: results.map(r => ({
         id: r.id, name: r.name,
-        brief: '连板 ' + r.params.minLbc + '<N<' + r.params.maxLbc + ' · 止损 ' + r.params.stopLossPct + '% · 回撤 ' + r.params.trailPct + '% · 断板即出',
+        brief: '连板 ' + r.params.minLbc + '<N<' + r.params.maxLbc + ' · 止损 ' + r.params.stopLossPct + '% · 回撤 ' + r.params.trailPct + '% · 断板即出（14:57 判定 / 集合竞价成交）',
         date: r.date,
         totalC: r.totalC, cashC: r.cashC, mvC: r.mvC,
         dayPnlC: r.dayPnlC, dayRet: r.dayRet,
