@@ -178,6 +178,12 @@
         <button id="btnGhDash">打开云端看板</button>
         <span id="ghStatus" class="mut">未连接 · 下方表格里点「加入模拟」即可把方案接到每日任务</span>
       </div>
+      <div class="row gh-row">
+        <span class="gh-lab">方案云同步</span>
+        <button id="btnCfgPush">↑ 上传方案到云端</button>
+        <button id="btnCfgPull">↻ 从云端读回</button>
+        <span id="cfgSyncStatus" class="mut">未同步</span>
+      </div>
       <div id="ghBox"></div>
       <div id="cfgList"></div>
     </div>
@@ -243,16 +249,27 @@ function resolveDataset(){
   }
   /* 外链数据集：window.__DS_URL__ 或 ?ds=xxx（云端版指向每日自动更新的累积数据集）。
      放在内联分支之后 → 单文件版的内联数据永远优先，不受影响。 */
-  var dsUrl = window.__DS_URL__ || ((location.search||'').match(/[?&]ds=([^&]*)/)||[])[1]
-  if(dsUrl && typeof fetch === 'function'){
-    var u = decodeURIComponent(dsUrl)
-    return fetch(u, {cache:'no-store'}).then(function(r){
-      if(!r.ok) throw new Error('HTTP ' + r.status + '（' + u + '）')
-      return r.json()
-    })
-  }
+  var dsUrl = explicitDsUrl()
+  if(dsUrl && typeof fetch === 'function') return fetchJson(dsUrl)
   return Promise.resolve(null)
 }
+
+/* 显式指定的数据源地址：云端版 window.__DS_URL__，或 ?ds=xxx */
+function explicitDsUrl(){
+  var u = window.__DS_URL__ || ((location.search||'').match(/[?&]ds=([^&]*)/)||[])[1]
+  return u ? decodeURIComponent(u) : null
+}
+function fetchJson(u){
+  return fetch(u, {cache:'no-store'}).then(function(r){
+    if(!r.ok) throw new Error('HTTP ' + r.status + '（' + u + '）')
+    return r.json()
+  })
+}
+/* 本地累积数据集（每日任务维护，通常比内置快照新 1 个交易日）。
+   本地打开本页时：内置快照先出首屏，随后自动切换到它。 */
+var LOCAL_STORE = 'paper/data/store.json'
+var dsSource = '内置快照'
+var dsMsg = ''
 
 function fmtMoney(c){ return (c/100).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2}) }
 function fmtPct(x,digits){ var d = digits===undefined?2:digits; return (x*100).toFixed(d)+'%' }
@@ -274,23 +291,69 @@ function attachSeal(ds){
 }
 
 function boot(){
+  var pu = explicitDsUrl()
+  if(pu){
+    /* 显式数据源（云端每日累积数据集 / ?ds=）就是权威源：直接用它，失败即报错 */
+    fetchJson(pu).then(attachSeal).then(function(ds){
+      if(!ds || !ds.st) return fail('未能加载行情数据集：<code>' + esc(pu) + '</code> 内容不完整。')
+      DS = ds; dsSource = '外链 ' + pu; start()
+    }).catch(function(e){
+      fail('数据集加载失败：' + e.message + '<br>（地址：<code>' + esc(pu) + '</code>）')
+    })
+    return
+  }
+  /* 本地打开：内置快照先出首屏（不阻塞），随后后台换累积数据集 */
   resolveDataset().then(attachSeal).then(function(ds){
     if(!ds || !ds.st) return fail('未能加载行情数据集。<br>请先执行 <code>node build-dataset.js</code>，或直接打开单文件版「打板策略模拟器.html」。')
-    DS = ds
-    start()
+    DS = ds; dsSource = '内置快照'; start()
+    upgradeToStore()
   }).catch(function(e){
     fail('数据集加载失败：' + e.message + '<br>' +
       (window.__DS_URL__ ? '（云端数据集地址：<code>' + window.__DS_URL__ + '</code>，请确认它已随每日任务提交到仓库）'
                          : '建议直接双击打开单文件版「打板策略模拟器.html」。'))
   })
 }
+
+/* 后台升级：本地打开时用累积数据集 paper/data/store.json 覆盖内置快照。
+   规则＝权威源（累积数据集）优先，但绝不抢跑：先到先用保首屏，它到了才覆盖重渲。
+   ① 单文件版自包含、不联网 → 直接跳过；② 拿不到/比快照旧 → 静默保持快照。 */
+function upgradeToStore(){
+  if(window.__DATASET_GZ__) return             // 单文件版（gzip+base64 内联）：不联网
+  if(location.protocol === 'file:') return     // 直接双击 index.html：没有服务器可取
+  if(typeof fetch !== 'function') return
+  fetchJson(LOCAL_STORE).then(function(ds){
+    if(!ds || !ds.st || !ds.dates || !ds.dates.length) return
+    var cur = (DS && DS.dates && DS.dates.length) ? DS.dates[DS.dates.length-1] : ''
+    var nxt = ds.dates[ds.dates.length-1]
+    if(nxt < cur) return                                  // 累积数据集反而更旧 → 不降级
+    if(nxt === cur && ds.dates.length <= DS.dates.length) return   // 同日且没更长 → 不必重渲
+    DS = ds; dsSource = '累积数据集 ' + LOCAL_STORE
+    attachSeal(DS).then(function(){ refresh('已自动切到累积数据集（截至 ' + nxt + '）') })
+  }).catch(function(){ /* 拿不到就继续用内置快照 */ })
+}
+
+/* 换数据源后只重渲结果，不重绑事件（bind 只跑一次） */
+function refresh(msg){
+  dsMsg = msg || ''
+  BS.parseDataset(DS); BS.buildBoards(DS, BS.parseDataset(DS))
+  updateMeta()
+  if($('app').style.display === 'none') return
+  run()
+  try{ cfgRender() }catch(e){}
+}
+
+function updateMeta(){
+  var m = DS.meta || {}
+  var codes = Object.keys(DS.st).length
+  var thru = m.through || m.lastDate || DS.dates[DS.dates.length-1]   // 累积数据集用 lastDate
+  $('metaLine').innerHTML = '数据源：<b>腾讯日线（不复权）</b> · 覆盖 <b>'+codes+'</b> 只曾连板的个股 · 行情截至 <b>'+thru+'</b>'+
+    ' · 日历 <b>'+DS.dates.length+'</b> 个交易日 · 回测可用区间 <b>'+DS.dates[DS.warmup]+' ~ '+thru+'</b>'+
+    ' · 数据集 <b>'+esc(dsSource)+'</b>'+(dsMsg ? ' <span class="tag live-tag">'+esc(dsMsg)+'</span>' : '')
+}
+
 function fail(msg){ $('boot').innerHTML = '<div class="err">' + msg + '</div>'; $('boot').style.display = '' }
 function start(){
-  var m = DS.meta
-  var codes = Object.keys(DS.st).length
-  var thru = m.through || m.lastDate || DS.dates[DS.dates.length-1]   // 云端累积数据集用 lastDate
-  $('metaLine').innerHTML = '数据源：<b>腾讯日线（不复权）</b> · 覆盖 <b>'+codes+'</b> 只曾连板的个股 · 行情截至 <b>'+thru+'</b>'+
-    ' · 日历 <b>'+DS.dates.length+'</b> 个交易日 · 回测可用区间 <b>'+DS.dates[DS.warmup]+' ~ '+thru+'</b>'
+  updateMeta()
   $('boot').style.display='none'
   $('app').style.display=''
   BS.parseDataset(DS); BS.buildBoards(DS, BS.parseDataset(DS))
@@ -364,9 +427,12 @@ function bind(){
   $('btnGhRefresh').onclick=ghConnect
   $('btnGhForget').onclick=ghForget
   $('btnGhDash').onclick=function(){ window.open(GH.page, '_blank', 'noopener') }
+  $('btnCfgPush').onclick=function(){ plansPush() }
+  $('btnCfgPull').onclick=function(){ plansPull(false) }
   $('ghToken').value = ghTokenGet()
   cfgRender()
   ghConnect()          // 无 token 时也会匿名读一次公开仓配置（失败则静默）
+  plansPull(true)      // 自动读回云端方案库（匿名即可）→ 换设备也能看到保存过的方案
 }
 
 /* ================= 配置方案：保存 / 口语化描述 / 载入 ================= */
@@ -463,12 +529,14 @@ function cfgSave(){
       endDate: s.endDate, failOpenCount: s.failOpenCount
     },
     desc: humanize(P, s),
-    notes: cautions(P, s, last)
+    notes: cautions(P, s, last),
+    pending: true            // 尚未上传到云端方案库（换设备看不到）
   }
   var list = cfgAll(); list.unshift(rec)
   if(!cfgStore(list)) return
   $('cfgName').value = ''
   cfgRender()
+  cfgSyncAfterChange()
 }
 
 function cfgDelete(id){
@@ -477,6 +545,7 @@ function cfgDelete(id){
   if(!confirm('删除配置「'+c.name+'」？删除后不可恢复（如已导出文件可再导入）。')) return
   cfgStore(list.filter(function(x){ return x.id!==id }))
   cfgRender()
+  cfgSyncAfterChange()
 }
 
 function cfgApply(id){
@@ -537,12 +606,16 @@ function windowStats (P) {
 
 /* ================= 云端每日模拟（读写 GitHub 仓库里的 config.json） ================= */
 var GH = {
-  owner: 'zyh19870426', repo: 'stock-board-paper', branch: 'main', file: 'config.json', wf: 'daily.yml'
+  owner: 'zyh19870426', repo: 'stock-board-paper', branch: 'main', file: 'config.json',
+  plansFile: 'plans.json',   // 方案库（保存的方案本身的跨设备同步）
+  wf: 'daily.yml'
 }
 GH.page = 'https://' + GH.owner + '.github.io/' + GH.repo + '/'
 GH.actions = 'https://github.com/' + GH.owner + '/' + GH.repo + '/actions/workflows/' + GH.wf
 var GH_TK_KEY = 'board-sim-ghtk'          // sessionStorage：关掉标签页即失效，不落盘
 var GH_STATE = { remote: null, sha: null, busy: false }
+/* 方案库（plans.json）状态：ok=读到过云端；sha=写回时用的版本号 */
+var CFG_CLOUD = { ok: false, sha: null, plans: [] }
 
 function ghTokenGet () { try { return sessionStorage.getItem(GH_TK_KEY) || '' } catch (e) { return '' } }
 function ghTokenSet (v) { try { v ? sessionStorage.setItem(GH_TK_KEY, v) : sessionStorage.removeItem(GH_TK_KEY) } catch (e) {} }
@@ -571,6 +644,107 @@ function ghApi (method, path, body) {
       throw new Error(msg)
     })
   })
+}
+
+/* ================= 方案库云同步（plans.json）：跨设备共享「保存的配置」 =================
+   云端 config.json 只存「已加入模拟」的策略；本文件存的是整份保存列表（含说明/注意事项），
+   所以手机打开页面也能看到电脑上保存的方案。读匿名即可，写需要 token。 */
+
+function cfgPendingCount () {
+  return cfgAll().filter(function (c) { return c.pending }).length
+}
+
+function cfgSyncStatus (extra) {
+  var el = $('cfgSyncStatus'); if (!el) return
+  var n = cfgAll().length, p = cfgPendingCount(), m = (CFG_CLOUD.plans || []).length
+  if (!CFG_CLOUD.ok) {
+    el.innerHTML = '云端方案库未读到' + (ghTokenGet() ? '' : '（本地保存的东西在别的设备看不到）') + (extra ? ' · ' + extra : '')
+    return
+  }
+  el.innerHTML = '本地 <b>' + n + '</b> 条 · 云端 <b>' + m + '</b> 条'
+    + (p ? ' · <span class="gh-bad">' + p + ' 条未上传</span>（点「↑ 上传方案到云端」）'
+         : ' · <span class="gh-ok">已一致</span>')
+    + (extra ? ' · ' + extra : '')
+}
+
+/* 读回云端方案库：云端为准 + 保留本地「未上传」的条目（避免把刚保存的东西冲掉） */
+function plansPull (silent) {
+  if (typeof location !== 'undefined' && location.protocol === 'file:') return Promise.resolve(null)
+  var tk = ghTokenGet()
+  var h = { 'Accept': 'application/vnd.github+json' }
+  if (tk) h['Authorization'] = 'Bearer ' + tk
+  return fetch('https://api.github.com/repos/' + GH.owner + '/' + GH.repo + '/contents/' + GH.plansFile
+      + '?ref=' + GH.branch + '&_=' + Date.now(), { headers: h, cache: 'no-store' })
+    .then(function (r) {
+      if (r.status === 404) return null                      // 首次：云端还没有方案库
+      if (!r.ok) throw new Error('HTTP ' + r.status)
+      return r.json()
+    })
+    .then(function (j) {
+      /* 云端还没有方案库（首次 / 404）：只标记状态，绝不动本地已有方案 */
+      if (!j || !j.content) {
+        CFG_CLOUD.ok = true; CFG_CLOUD.sha = null; CFG_CLOUD.plans = []
+        cfgSyncStatus(); return cfgAll()
+      }
+      var cloud = []
+      try { cloud = (JSON.parse(b64dec(j.content)).plans) || [] } catch (e) { cloud = [] }
+      CFG_CLOUD.ok = true; CFG_CLOUD.sha = j.sha; CFG_CLOUD.plans = cloud
+      var ids = {}
+      var merged = cloud.map(function (c) {
+        var o = {}; for (var k in c) if (Object.prototype.hasOwnProperty.call(c, k)) o[k] = c[k]
+        o.pending = false; ids[o.id] = 1; return o
+      })
+      /* 本地「未确认已上云」的条目（pending 为 true 或早期无此字段的）一律保留，避免误删 */
+      cfgAll().forEach(function (c) { if (c.pending !== false && !ids[c.id]) merged.push(c) })
+      merged.sort(function (a, b) { return String(b.ts || '').localeCompare(String(a.ts || '')) })
+      cfgStore(merged)
+      cfgRender()
+      return merged
+    })
+    .catch(function (e) {
+      CFG_CLOUD.ok = false
+      if (!silent) alert('读取云端方案失败：' + e.message)
+      cfgSyncStatus()
+      return null
+    })
+}
+
+/* 上传：用本地列表整体覆盖云端（所以「删除」也会同步过去） */
+function plansPush () {
+  if (typeof location !== 'undefined' && location.protocol === 'file:') { alert('离线文件（file://）无法上传，请通过网站在线页面操作。'); return Promise.resolve(false) }
+  if (!ghTokenGet()) {
+    alert('上传方案需要 GitHub token。\n\n请在下面「云端每日模拟」那一行填入 token（需 repo 权限），再点上传。\n（只是想在手机上看，不填写也行 —— 电脑上传过一次就够了）')
+    $('ghToken').focus(); return Promise.resolve(false)
+  }
+  var list = cfgAll().map(function (c) {
+    var o = {}; for (var k in c) if (Object.prototype.hasOwnProperty.call(c, k) && k !== 'pending') o[k] = c[k]
+    return o
+  })
+  var payload = JSON.stringify({ v: 1, app: 'board-sim', updated: new Date().toISOString(), plans: list }, null, 1)
+  function put () {
+    var body = { message: '方案同步 · ' + list.length + ' 条', content: b64enc(payload), branch: GH.branch }
+    if (CFG_CLOUD.sha) body.sha = CFG_CLOUD.sha
+    return ghApi('PUT', '/repos/' + GH.owner + '/' + GH.repo + '/contents/' + GH.plansFile, body)
+  }
+  $('cfgSyncStatus').innerHTML = '上传中…'
+  return put().catch(function (e) {
+    if (/409/.test(e.message || '')) return plansPull(true).then(put)   // 版本号过期：重读一次再写
+    throw e
+  }).then(function (j) {
+    CFG_CLOUD.sha = (j && j.content && j.content.sha) || CFG_CLOUD.sha
+    CFG_CLOUD.ok = true; CFG_CLOUD.plans = list
+    var all = cfgAll(); all.forEach(function (c) { c.pending = false }); cfgStore(all)
+    cfgSyncStatus('已上传 ' + list.length + ' 条')
+    return true
+  }).catch(function (e) {
+    $('cfgSyncStatus').innerHTML = '<span class="gh-bad">上传失败</span> · ' + esc(e.message)
+    return false
+  })
+}
+
+/* 保存/删除后：有 token 就顺手同步，没有就只标「未上传」（不打扰） */
+function cfgSyncAfterChange () {
+  if (ghTokenGet() && CFG_CLOUD.ok) plansPush(); else cfgSyncStatus()
 }
 
 /* 策略参数标准化：字段顺序固定，保证「本地方案 ↔ 云端策略」可逐字比对（识别是否已在跑） */
@@ -681,7 +855,7 @@ function cfgLive (id) {
   if (!confirm('把「' + c.name + '」接到云端每日模拟？\n\n'
     + '策略名：' + name + '（标识 ' + sid + '）\n'
     + '配置：' + P.slots + ' 份 · ' + lbcRange(P) + ' · 止损 ' + P.stopLossPct + '% · 回撤 ' + P.trailPct + '%\n'
-    + '起点：' + GH_STATE.remote.startDate + '（与其它策略同日可比，历史会自动补算）\n\n'
+    + '起点：' + GH_STATE.remote.startDate + '（所有策略同一起点，从该日起逐日累加，比的是同一段行情）\n\n'
     + '写入后会立即触发一次云端重放，2~5 分钟后云端看板就能看到它。')) return
   var next = JSON.parse(JSON.stringify(GH_STATE.remote))
   next.strategies.push({ id: sid, name: name, params: P })
@@ -702,19 +876,24 @@ function cfgUnlive (id) {
 function cfgRender () {
   var list = cfgAll()
   $('cfgCount').textContent = list.length + ' 条已保存'
+  cfgSyncStatus()
   if (!list.length) {
     $('cfgList').innerHTML = '<div class="empty">还没有保存过配置。调出一组你满意的参数后，在上面填个名字点「保存当前配置」，'
       + '这里会生成一张对比表：<b>资金份数 · 连板数 · 30/60/90/120/全程收益率</b>，'
-      + '每一套都能一键接到云端每日模拟，让程序按真实行情天天跑。</div>'
+      + '每一套都能一键接到云端每日模拟，让程序按真实行情天天跑。<br>'
+      + '<b>换设备（比如手机）打开时这里本来是空的</b> —— 电脑上保存 + 上传过一次后，点上面的「<b>↻ 从云端读回</b>」就会全部出现。</div>'
     return
   }
   var thru = DS ? ((DS.meta && (DS.meta.through || DS.meta.lastDate)) || DS.dates[DS.dates.length - 1]) : '—'
   var days = DS ? DS.dates.length : 0
+  var srcNote = window.__DATASET_GZ__
+    ? '本页是<b>单文件自包含版</b>，用内联数据集，不联网；想与云端/累积数据集完全对齐，请打开项目目录下的 <span class="pill">index.html</span>（需 <span class="pill">node server.js</span>）。'
+    : '本地打开本页时会自动改用<b>累积数据集</b> <span class="pill">paper/data/store.json</span>（每日追加、只增不减），与云端每日任务同一份；'
+      + '取不到时才回退内置快照（两者可能差最后一个交易日）。手动指定数据集：地址后加 <span class="pill">?ds=路径</span>。'
   var h = '<div class="mut" style="font-size:11px;line-height:1.75;margin:2px 0 8px">'
-    + '收益 = 用当前数据集（<b>' + days + '</b> 个交易日，截至 ' + esc(thru) + '）按各自时间窗口<b>独立空仓起算</b>的历史回测，'
+    + '收益 = 用当前数据集（<b>' + days + '</b> 个交易日，截至 ' + esc(thru) + '，源：' + esc(dsSource) + '）按各自时间窗口<b>独立空仓起算</b>的历史回测，'
     + '不是云端每日模拟的累计收益；窗口越短笔数越少，越容易被一两笔极端盈亏带偏。<br>'
-    + '云端每日任务用的是<b>累积数据集</b>（每日追加，通常比这里的快照新 1 个交易日），同一套策略两边可能差最后一个交易日。'
-    + '想用累积数据集回测：<span class="pill">node server.js</span> 打开本页，地址后加 <span class="pill">?ds=paper/data/store.json</span>。</div>'
+    + srcNote + '</div>'
   h += '<div class="scroll" style="max-height:none"><table class="cfg-tbl"><thead><tr>'
   h += '<th class="tl">方案名</th><th>资金份数</th><th>连板数</th>'
   WINS.forEach(function (w) { h += '<th>' + w.label + '</th>' })
@@ -800,9 +979,9 @@ function cfgImport(ev){
       incoming.forEach(function(c){
         if(!c || !c.params) return
         if(!c.id || ids[c.id]) c.id = 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2,5)
-        ids[c.id]=1; list.push(c); added++
+        ids[c.id]=1; c.pending = true; list.push(c); added++
       })
-      if(cfgStore(list)){ cfgRender(); alert('已导入 '+added+' 条配置。') }
+      if(cfgStore(list)){ cfgRender(); cfgSyncAfterChange(); alert('已导入 '+added+' 条配置。') }
     }catch(e){ alert('导入失败：不是合法的配置文件。' + e.message) }
     ev.target.value = ''
   }

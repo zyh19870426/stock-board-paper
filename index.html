@@ -88,6 +88,11 @@ var signYuan = c => (c>0?'+':'') + fmtYuan(c)
 var pct = v => (v>0?'+':'') + (v*100).toFixed(2) + '%'
 var cls = v => v>0?'up':(v<0?'dn':'')
 var price = c => (c/100).toFixed(2)
+/* 数据集里的日期是 'YYYY-MM-DD'（带横线）；早期版本可能是 'YYYYMMDD'。
+   以前直接 slice(4,6) 去拼，遇到带横线的会显示成 '2026--10-' 和 x 轴 '-1-0-'，所以统一归一化。 */
+var dnum = d => String(d==null?'':d).replace(/[^0-9]/g,'')
+var cnDate = d => { var s=dnum(d); return s.length>=8 ? s.slice(0,4)+'-'+s.slice(4,6)+'-'+s.slice(6,8) : String(d==null?'':d) }
+var mmdd = d => { var s=dnum(d); return s.length>=8 ? s.slice(4,6)+'-'+s.slice(6,8) : s }
 
 document.querySelectorAll('.winbar button').forEach(b=>{
   b.onclick = function(){
@@ -110,7 +115,7 @@ function fetchJSON(){
 
 function render(d){
   DATA = d
-  var dateCN = d.date.slice(0,4)+'-'+d.date.slice(4,6)+'-'+d.date.slice(6,8)
+  var dateCN = cnDate(d.date)
   var upCN = new Date(d.updated).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'})
   document.getElementById('sub').textContent =
     '数据截至 '+dateCN+' 收盘 · 更新于 '+upCN+' · 起点 '+d.startDate+' · 每套策略本金 '+fmtYuan(d.initialCash*100)+' 元'
@@ -178,12 +183,19 @@ function drawChart(){
   if(!DATA) return
   var W = svg.clientWidth || 1000, H = 260, padL = 52, padR = 14, padT = 14, padB = 26
   var series = DATA.strategies.map(s=>({id:s.id, name:s.name, pts:(s.daily||[]).map(e=>({d:e.d, v:e.cr*100}))}))
-  var maxLen = Math.max.apply(null, series.map(s=>s.pts.length))
-  if(!maxLen){ svg.innerHTML=''; return }
-  var from = WIN>0 ? Math.max(0, maxLen-WIN) : 0
-  var n = maxLen - from
+  /* ★ 按「日期」对齐，而不是按数组下标。各策略起点可能不同（日后从不同日期接入模拟，
+     或手工改过 config.json 里某一套的 startDate），按下标切会把短序列拉伸到整幅、点位画错，
+     短窗口下甚至整条曲线被切空而不显示。这里取所有策略日期的并集作为公共横轴。 */
+  var dateSet = Object.create(null), allDates = []
+  series.forEach(s=> s.pts.forEach(p=>{ if(!dateSet[p.d]){ dateSet[p.d]=1; allDates.push(p.d) } }))
+  if(!allDates.length){ svg.innerHTML=''; return }
+  allDates.sort()
+  var from = WIN>0 ? Math.max(0, allDates.length-WIN) : 0
+  var view = allDates.slice(from)
+  var xi = Object.create(null); view.forEach((d,i)=>{ xi[d]=i })
+  var n = view.length
   var all = []
-  series.forEach(s=> s.pts.slice(from).forEach(p=>all.push(p.v)))
+  series.forEach(s=> s.pts.forEach(p=>{ if(xi[p.d]!=null) all.push(p.v) }))
   var mn = Math.min(0, Math.min.apply(null, all)), mx = Math.max(0.0001, Math.max.apply(null, all))
   var pad = (mx-mn)*0.12; mn-=pad; mx+=pad
   var X = i => padL + (n<2 ? 0 : (W-padL-padR)*i/(n-1))
@@ -197,22 +209,22 @@ function drawChart(){
       + '<text x="'+(padL-6)+'" y="'+(yy+4)+'" fill="#8fa0bf" font-size="11" text-anchor="end">'+vv.toFixed(1)+'%</text>'
   }
   /* 零轴以下淡红、以上淡绿? 否：零轴加粗虚线即可（A股红涨绿跌只用于数字） */
-  /* x 轴日期：首/中/尾 */
-  var d0 = series[0].pts, lbl = [from, from+Math.floor((n-1)/2), from+n-1]
+  /* x 轴日期：首/中/尾（取自公共横轴） */
+  var lbl = [0, Math.floor((n-1)/2), n-1]
   lbl.forEach((gi,li)=>{
-    if(!d0[gi]) return
-    var dd = d0[gi].d
-    var txt = dd.slice(4,6)+'-'+dd.slice(6,8)
-    g += '<text x="'+X(gi-from)+'" y="'+(H-8)+'" fill="#8fa0bf" font-size="11" text-anchor="'+(li===0?'start':(li===2?'end':'middle'))+'">'+txt+'</text>'
+    var dd = view[gi]; if(!dd) return
+    var txt = mmdd(dd)
+    g += '<text x="'+X(gi)+'" y="'+(H-8)+'" fill="#8fa0bf" font-size="11" text-anchor="'+(li===0?'start':(li===2?'end':'middle'))+'">'+txt+'</text>'
   })
   series.forEach(s=>{
-    var pts = s.pts.slice(from)
+    /* 只取落在横轴内的点，x 由「日期 → 下标」映射决定，与其它策略严格同一时间刻度 */
+    var pts = s.pts.filter(p=> xi[p.d]!=null)
     if(!pts.length) return
-    var path = pts.map((p,i)=>(i?'L':'M')+X(i).toFixed(1)+' '+Y(p.v).toFixed(1)).join(' ')
+    var path = pts.map((p,i)=>(i?'L':'M')+X(xi[p.d]).toFixed(1)+' '+Y(p.v).toFixed(1)).join(' ')
     g += '<path d="'+path+'" fill="none" stroke="'+colorOf(s.id)+'" stroke-width="2" stroke-linejoin="round"/>'
     var last = pts[pts.length-1]
-    g += '<circle cx="'+X(pts.length-1)+'" cy="'+Y(last.v)+'" r="3.5" fill="'+colorOf(s.id)+'"/>'
-      + '<text x="'+(X(pts.length-1)-6)+'" y="'+(Y(last.v)-8)+'" fill="'+colorOf(s.id)+'" font-size="11" text-anchor="end" font-weight="600">'+pct(last.v/100)+'</text>'
+    g += '<circle cx="'+X(xi[last.d])+'" cy="'+Y(last.v)+'" r="3.5" fill="'+colorOf(s.id)+'"/>'
+      + '<text x="'+(X(xi[last.d])-6)+'" y="'+(Y(last.v)-8)+'" fill="'+colorOf(s.id)+'" font-size="11" text-anchor="end" font-weight="600">'+pct(last.v/100)+'</text>'
   })
   svg.setAttribute('viewBox','0 0 '+W+' '+H)
   svg.innerHTML = g

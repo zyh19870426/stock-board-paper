@@ -238,6 +238,7 @@ function buildPush (date, results) {
 /* ---------------- 主流程 ---------------- */
 async function main () {
   const t0 = Date.now()
+  let noNewDay = false          // 本次是否「没有新交易日」（true 时只重放看板，不写日报、不推送）
   const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'))
   console.log('== 打板模拟跟进 ' + ts() + ' ==')
   console.log('  策略 ' + cfg.strategies.map(s => s.id + '·' + s.name).join(' / '))
@@ -267,20 +268,26 @@ async function main () {
     const ap = ST.appendDays(store, fr.barsMap, nameOf)
     console.log('  数据集新增 ' + ap.added + ' 个交易日' + (ap.newDays.length ? '（' + ap.newDays.join('、') + '）' : '') + '，新纳入 ' + ap.newStocks + ' 只票')
     if (ap.added === 0) {
-      console.log('  ⚠️ 没有新交易日（非交易日 / 数据源未更新）→ 本次不改动账户')
+      /* ★ 这里绝不能 return。
+       *   手动触发（页面上点「加入模拟」「移出模拟」触发的正是这个）时，当天通常已经跑过一次，
+       *   抓取自然「没有新交易日」——但 config 变了，线上看板数据必须跟着重算。
+       *   原来在这里 return 的后果：新加的策略永远不出现在每日收益看板上，
+       *   必须等到下一个真正的新交易日才连带更新（用户看到的就是这个）。
+       *   所以现在只标记「账户不动、日报不写、不推送」，重放与写 dashboard.json 照常执行。 */
+      noNewDay = true
+      console.log('  ⚠️ 没有新交易日（休市 / 数据源未更新 / 今天已跑过）→ 账户不变，但仍按当前配置重放并刷新看板数据')
       if (!DRY) {
         const last = store.dates[store.dates.length - 1]
-        const note = '# 休市 / 无新数据 · ' + last + '\n\n本次运行未取到 ' + last + ' 之后的新交易日数据，账户保持不动。\n'
+        const note = '# 无新交易日 · ' + last + '\n\n本次未取到 ' + last + ' 之后的新交易日数据，账户保持不动（线上看板数据仍按当前 config 重算）。\n'
         fs.mkdirSync(REPORTS, { recursive: true })
         fs.writeFileSync(path.join(REPORTS, 'last-run.txt'), note, 'utf8')
       }
-      return
     }
   } else {
-    console.log('  --no-fetch：跳过抓取，直接用现有数据集重算')
+    console.log('  --no-fetch：跳过抓取，直接用现有数据集重算（账户按当前 config 重放）')
   }
 
-  if (!DRY) ST.save(STORE_FILE, store)
+  if (!DRY && !noNewDay) ST.save(STORE_FILE, store)
 
   /* --- 2. 两套策略重放 --- */
   const date = store.dates[store.dates.length - 1]
@@ -309,10 +316,18 @@ async function main () {
   const push = buildPush(date, results)
   if (!DRY) {
     fs.mkdirSync(REPORTS, { recursive: true })
-    fs.writeFileSync(path.join(REPORTS, date + '.md'), report, 'utf8')
-    fs.writeFileSync(path.join(REPORTS, 'latest.md'), report, 'utf8')
-    fs.writeFileSync(path.join(REPORTS, 'last-run.txt'), report.split('\n').slice(0, 3).join('\n') + '\n', 'utf8')
-    /* 线上页面数据：全量净值曲线 + 成交明细（GitHub Pages 的 index.html 读取） */
+    if (!noNewDay) {
+      fs.writeFileSync(path.join(REPORTS, date + '.md'), report, 'utf8')
+      fs.writeFileSync(path.join(REPORTS, 'latest.md'), report, 'utf8')
+      fs.writeFileSync(path.join(REPORTS, 'last-run.txt'), report.split('\n').slice(0, 3).join('\n') + '\n', 'utf8')
+      console.log('  报告已写：reports/' + date + '.md')
+    } else {
+      console.log('  无新交易日：日报不改写（线上看板数据已按当前配置刷新）')
+    }
+    /* ★ 线上看板数据（dashboard.json / summary.json）：无论有没有新交易日都重写。
+       否则「手动新增/移出策略」时（手动触发的这次通常正好没有新交易日）
+       看板会一直停在旧策略列表上，要等下一个新交易日才生效。
+       全量净值曲线 + 成交明细（GitHub Pages 的 index.html 读取） */
     fs.writeFileSync(path.join(DATA, 'dashboard.json'), JSON.stringify({
       updated: new Date().toISOString(), date,
       startDate: cfg.startDate, initialCash: cfg.initialCash,
@@ -348,13 +363,12 @@ async function main () {
         equityTotalC: r.equityTail.map(e => e.totalC)
       }))
     }, null, 1), 'utf8')
-    console.log('  报告已写：reports/' + date + '.md')
   } else {
     console.log('  --dry：不写文件')
   }
 
-  /* --- 4. 推送 --- */
-  if (!DRY) {
+  /* --- 4. 推送（只有真的新增了交易日才推，避免休市日/手动重跑刷屏） --- */
+  if (!DRY && !noNewDay) {
     const nr = await notify('打板模拟跟进 · ' + date, push)
     console.log('  推送：' + nr.join('；'))
   }
