@@ -1,49 +1,11 @@
 {
- "updated": "2026-10-15T01:51:24.882Z",
- "date": "2026-10-15",
+ "updated": "2026-10-15T02:30:27.153Z",
+ "date": "2026-10-14",
  "strategies": [
   {
    "id": "S1",
    "name": "策略1 · 只买3板",
-   "date": "2026-10-15",
-   "totalC": 10076936,
-   "dayPnlC": 76936,
-   "dayRet": 0.007693600000000078,
-   "cumPnlC": 76936,
-   "cumRet": 0.007693600000000078,
-   "tradeCount": 0,
-   "winRate": 0,
-   "maxDrawdown": 0,
-   "positions": [
-    {
-     "code": "603968",
-     "name": "醋化股份",
-     "lbc": 3,
-     "shares": 3400,
-     "buyDate": "2026-10-15",
-     "buyC": 1430
-    }
-   ],
-   "nextCandidates": [
-    {
-     "code": "001318",
-     "name": "阳光乳业",
-     "lbc": 3
-    }
-   ],
-   "equityDates": [
-    "2026-10-14",
-    "2026-10-15"
-   ],
-   "equityTotalC": [
-    10000000,
-    10076936
-   ]
-  },
-  {
-   "id": "S2",
-   "name": "策略2 · 只买5板",
-   "date": "2026-10-15",
+   "date": "2026-10-14",
    "totalC": 10000000,
    "dayPnlC": 0,
    "dayRet": 0,
@@ -55,88 +17,91 @@
    "positions": [],
    "nextCandidates": [
     {
-     "code": "002343",
-     "name": "慈文传媒",
-     "lbc": 5
+     "code": "603968",
+     "name": "醋化股份",
+     "lbc": 3
     }
    ],
    "equityDates": [
-    "2026-10-14",
-    "2026-10-15"
+    "2026-10-14"
    ],
    "equityTotalC": [
-    10000000,
+    10000000
+   ]
+  },
+  {
+   "id": "S2",
+   "name": "策略2 · 只买5板",
+   "date": "2026-10-14",
+   "totalC": 10000000,
+   "dayPnlC": 0,
+   "dayRet": 0,
+   "cumPnlC": 0,
+   "cumRet": 0,
+   "tradeCount": 0,
+   "winRate": 0,
+   "maxDrawdown": 0,
+   "positions": [],
+   "nextCandidates": [],
+   "equityDates": [
+    "2026-10-14"
+   ],
+   "equityTotalC": [
     10000000
    ]
   },
   {
    "id": "S3",
    "name": "配置 1",
-   "date": "2026-10-15",
-   "totalC": 10871968,
-   "dayPnlC": 871968,
-   "dayRet": 0.08719680000000007,
-   "cumPnlC": 871968,
-   "cumRet": 0.08719680000000007,
+   "date": "2026-10-14",
+   "totalC": 10000000,
+   "dayPnlC": 0,
+   "dayRet": 0,
+   "cumPnlC": 0,
+   "cumRet": 0,
    "tradeCount": 0,
    "winRate": 0,
    "maxDrawdown": 0,
-   "positions": [
+   "positions": [],
+   "nextCandidates": [
     {
      "code": "603533",
      "name": "掌阅科技",
-     "lbc": 1,
-     "shares": 3300,
-     "buyDate": "2026-10-15",
-     "buyC": 2951
+     "lbc": 1
     }
    ],
-   "nextCandidates": [],
    "equityDates": [
-    "2026-10-14",
-    "2026-10-15"
+    "2026-10-14"
    ],
    "equityTotalC": [
-    10000000,
-    10871968
+    10000000
    ]
   },
   {
    "id": "S4",
    "name": "配置 5",
-   "date": "2026-10-15",
-   "totalC": 10052045,
-   "dayPnlC": 52045,
-   "dayRet": 0.005204500000000056,
-   "cumPnlC": 52045,
-   "cumRet": 0.005204500000000056,
+   "date": "2026-10-14",
+   "totalC": 10000000,
+   "dayPnlC": 0,
+   "dayRet": 0,
+   "cumPnlC": 0,
+   "cumRet": 0,
    "tradeCount": 0,
    "winRate": 0,
    "maxDrawdown": 0,
-   "positions": [
+   "positions": [],
+   "nextCandidates": [
     {
      "code": "603968",
      "name": "醋化股份",
-     "lbc": 3,
-     "shares": 2300,
-     "buyDate": "2026-10-15",
-     "buyC": 1430
-    }
-   ],
-   "nextCandidates": [
-    {
-     "code": "001318",
-     "name": "阳光乳业",
      "lbc": 3
     }
    ],
    "equityDates": [
-    "2026-10-14",
-    "2026-10-15"
+    "2026-10-14"
    ],
    "equityTotalC": [
-    10000000,
-    10052045
+    10000000
    ]
   }
  ]
