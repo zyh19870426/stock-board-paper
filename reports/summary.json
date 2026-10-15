@@ -1,7 +1,34 @@
 {
- "updated": "2026-10-15T02:30:27.153Z",
+ "updated": "2026-10-15T06:15:55.887Z",
  "date": "2026-10-14",
  "strategies": [
+  {
+   "id": "M2",
+   "name": "跟随·近10日最强",
+   "date": "2026-10-14",
+   "totalC": 10000000,
+   "dayPnlC": 0,
+   "dayRet": 0,
+   "cumPnlC": 0,
+   "cumRet": 0,
+   "tradeCount": 0,
+   "winRate": 0,
+   "maxDrawdown": 0,
+   "positions": [],
+   "nextCandidates": [
+    {
+     "code": "603968",
+     "name": "醋化股份",
+     "lbc": 3
+    }
+   ],
+   "equityDates": [
+    "2026-10-14"
+   ],
+   "equityTotalC": [
+    10000000
+   ]
+  },
   {
    "id": "S1",
    "name": "策略1 · 只买3板",
