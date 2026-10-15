@@ -36,6 +36,9 @@ const DRY = ARGV.includes('--dry')
 const NO_FETCH = ARGV.includes('--no-fetch')
 const RESEED = ARGV.includes('--reseed')
 
+const BJ = ST.beijingNow(process.env.PAPER_NOW ? Date.parse(process.env.PAPER_NOW) : null)
+const MARKET_CLOSED = ST.isMarketClosed(BJ)
+
 const money = c => (c / 100).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const pct = v => (v > 0 ? '+' : '') + (v * 100).toFixed(2) + '%'
 const yuan = c => (c > 0 ? '+' : '') + money(c)
@@ -246,6 +249,7 @@ async function main () {
 
   /* --- 1. 数据集 --- */
   let store
+  let repaired = false       // 本次是否做了「自愈」（剔除已入库的盘中半截日线）
   if (RESEED || !fs.existsSync(STORE_FILE)) {
     if (!fs.existsSync(LOCAL_DATASET)) throw new Error('缺少种子数据集：' + LOCAL_DATASET + '（请在开发机先跑 build-dataset.js，或提交一份 data/store.json）')
     store = ST.initFromDataset(LOCAL_DATASET, 0)   // 0 = 保留全部历史（云端回测要跑长窗口）
@@ -253,6 +257,16 @@ async function main () {
   } else {
     store = ST.load(STORE_FILE)
     console.log('  数据集：载入 ' + store.dates.length + ' 天 / ' + Object.keys(store.st).length + ' 只票（至 ' + store.dates[store.dates.length - 1] + '）')
+  }
+
+  /* ★ 自愈：不只堵源头（dropUnfinishedToday），还要能修已污染的历史。
+   *   末位日期 >= 今天且尚未收盘 ⇒ 那根日线不可能是最终值，整根删掉。
+   *   必须放在抓取/追加之前 —— 否则 appendDays 看到「今天已存在」就不再追加，
+   *   收盘后真正的日线永远进不来。 */
+  const rep = ST.trimTrailingUnfinished(store, BJ.date, MARKET_CLOSED)
+  if (rep.dropped != null) {
+    repaired = true
+    console.log('  🔧 自愈：剔除已入库的盘中半截日线 ' + rep.dropped + '（' + rep.stocks + ' 只票截断/移除），收盘后重跑会补回最终值')
   }
 
   if (!NO_FETCH) {
@@ -265,6 +279,16 @@ async function main () {
       onProgress: (d, n, f) => console.log('    ' + d + '/' + n + '（失败 ' + f + '）')
     })
     console.log('  抓取完成：' + Object.keys(fr.barsMap).length + ' 只，失败 ' + fr.fail + '，耗时 ' + Math.round((Date.now() - t0) / 1000) + 's')
+    /* ★ 盘中护栏：未收盘前，绝不把「今天」这根还在走的日线当成收盘写进数据集。
+     *   本工作流会被页面上「加入模拟 / 移出模拟」随时手动触发，任何时间点都可能中招；
+     *   一旦写入就永久留在历史里且无法自愈（收盘后重跑时该日期已存在，不会再追加）。详见 lib/store.js。 */
+    if (!MARKET_CLOSED) {
+      const dz = ST.dropUnfinishedToday(fr.barsMap, BJ.date, MARKET_CLOSED)
+      if (dz.dropped) {
+        const hhmm = String(Math.floor(BJ.min / 60)).padStart(2, '0') + ':' + String(BJ.min % 60).padStart(2, '0')
+        console.log('  ⏸ 北京时间 ' + BJ.date + ' ' + hhmm + ' 尚未收盘（15:05 前）→ 剔掉 ' + dz.days.join('、') + ' 的盘中日线 ' + dz.dropped + ' 根，本次不写入数据集')
+      }
+    }
     const ap = ST.appendDays(store, fr.barsMap, nameOf)
     console.log('  数据集新增 ' + ap.added + ' 个交易日' + (ap.newDays.length ? '（' + ap.newDays.join('、') + '）' : '') + '，新纳入 ' + ap.newStocks + ' 只票')
     if (ap.added === 0) {
@@ -287,7 +311,7 @@ async function main () {
     console.log('  --no-fetch：跳过抓取，直接用现有数据集重算（账户按当前 config 重放）')
   }
 
-  if (!DRY && !noNewDay) ST.save(STORE_FILE, store)
+  if (!DRY && (!noNewDay || repaired)) ST.save(STORE_FILE, store)
 
   /* --- 2. 两套策略重放 --- */
   const date = store.dates[store.dates.length - 1]
