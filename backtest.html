@@ -260,6 +260,8 @@ function explicitDsUrl(){
   return u ? decodeURIComponent(u) : null
 }
 function fetchJson(u){
+  /* ★ 破 Pages CDN 缓存（~10min）：数据集每日一更，缓存期内会拿到旧快照 */
+  u += (u.indexOf('?') >= 0 ? '&' : '?') + '_=' + Date.now()
   return fetch(u, {cache:'no-store'}).then(function(r){
     if(!r.ok) throw new Error('HTTP ' + r.status + '（' + u + '）')
     return r.json()

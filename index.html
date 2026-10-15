@@ -134,8 +134,30 @@ function fetchJSON(){
 var LIVE = null
 function loadLive(){
   fetch('./data/intraday.json?_='+Date.now(), {cache:'no-store'}).then(r=> r.ok ? r.json() : null)
-    .then(function(j){ LIVE = j; renderLive() }).catch(function(){ /* 无快照或网络抖动：保留上一次内容 */ })
+    .then(function(j){ LIVE = j; renderLive(); if(DATA) render(DATA) }).catch(function(){ /* 无快照或网络抖动：保留上一次内容 */ })
 }
+/* ★ 盘中实时并入顶部卡片与收益曲线：
+   LIVE 快照比正式看板新一个交易日（盘中/收盘后至收盘跑之间）⇒
+   当日盈亏/累计收益率/总资产用实时值并标 ⚡实时；曲线追加当日实时点（收敛后由收盘跑转正）。 */
+function mergedStrategies(){
+  if(!DATA) return []
+  if(!LIVE || LIVE.phase==='holiday' || !LIVE.strategies || !LIVE.strategies.length) return DATA.strategies
+  if(String(LIVE.bjDate) <= String(DATA.date)) return DATA.strategies   // LIVE 不比看板新 ⇒ 不并
+  return DATA.strategies.map(function(s){
+    var lv = null
+    LIVE.strategies.forEach(function(x){ if(x.id===s.id) lv = x })
+    if(!lv) return s
+    var daily = (s.daily||[]).filter(function(p){ return p.d !== LIVE.bjDate })
+    daily = daily.concat([{ d: LIVE.bjDate, tc: lv.totalC, dp: lv.dayPnlC, dr: lv.dayRet, cr: lv.cumRet, live: 1 }])
+    return Object.assign({}, s, {
+      dayPnlC: lv.dayPnlC, dayRet: lv.dayRet, cumRet: lv.cumRet,
+      cumPnlC: lv.totalC - DATA.initialCash*100,
+      totalC: lv.totalC,
+      live: LIVE.phase==='trading' ? 1 : 0
+    })
+  })
+}
+function liveTagOf(s){ return s && s.live ? ' ⚡实时' : '' }
 function renderLive(){
   var box = document.getElementById('live')
   if(!LIVE || LIVE.phase==='holiday'){ box.style.display='none'; return }
@@ -175,16 +197,18 @@ function renderLive(){
 
 function render(d){
   DATA = d
+  var S = mergedStrategies()
   var dateCN = cnDate(d.date)
   var upCN = new Date(d.updated).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'})
   document.getElementById('sub').textContent =
     '数据截至 '+dateCN+' 收盘 · 更新于 '+upCN+' · 起点 '+d.startDate+' · 每套策略本金 '+fmtYuan(d.initialCash*100)+' 元'
+    + (S.length && S[0].live && LIVE ? ' · 顶部数字为盘中实时预演（'+LIVE.bjTime+'），以收盘跑为准' : '')
   document.getElementById('legend').innerHTML =
-    d.strategies.map(s=>'<span><i style="background:'+colorOf(s.id)+'"></i>'+s.name+'</span>').join('')
+    S.map(s=>'<span><i style="background:'+colorOf(s.id)+'"></i>'+s.name+'</span>').join('')
 
   /* 指标卡 */
   var h = ''
-  d.strategies.forEach(s=>{
+  S.forEach(s=>{
     h += '<div class="stitle" style="border-color:'+colorOf(s.id)+'">'+s.name+'　<small style="color:var(--tx2);font-weight:400">'+s.brief+'</small></div>'
     /* M2 专属：今日跟随谁 + 依据（收盘口径） */
     if(s.m2){
@@ -197,17 +221,17 @@ function render(d){
         + '</div></div>'
     }
     h += '<div class="cards">'
-      + card('当日盈亏', signYuan(s.dayPnlC)+' 元', cls(s.dayPnlC), '当日收益率 '+pct(s.dayRet))
-      + card('累计收益率', pct(s.cumRet), cls(s.cumRet), '累计盈亏 '+signYuan(s.cumPnlC)+' 元')
-      + card('总资产', fmtYuan(s.totalC)+' 元', '', '现金 '+fmtYuan(s.cashC)+' + 市值 '+fmtYuan(s.mvC))
+      + card('当日盈亏'+liveTagOf(s), signYuan(s.dayPnlC)+' 元', cls(s.dayPnlC), '当日收益率 '+pct(s.dayRet))
+      + card('累计收益率'+liveTagOf(s), pct(s.cumRet), cls(s.cumRet), '累计盈亏 '+signYuan(s.cumPnlC)+' 元')
+      + card('总资产'+liveTagOf(s), fmtYuan(s.totalC)+' 元', '', '现金 '+fmtYuan(s.cashC)+' + 市值 '+fmtYuan(s.mvC))
       + card('胜率 / 笔数', s.tradeCount? (s.winRate*100).toFixed(1)+'% / '+s.tradeCount+' 笔':'—', '', '最大回撤 '+(s.maxDrawdown*100).toFixed(2)+'%')
     h += '</div>'
   })
   document.getElementById('panels').innerHTML = h
 
   /* 两列：买卖记录 + 持仓/次日候选 */
-  d.strategies.forEach(s=>{
-    var col = '<div class="stitle" style="border-color:'+colorOf(s.id)+'">'+s.name+' · 成交与持仓</div>'
+  S.forEach(s=>{
+    var col = '<div class="stitle" style="border-color:'+colorOf(s.id)+'">'+s.name+' · 成交与持仓'+liveTagOf(s)+'</div>'
     var evs = []
     ;(s.trades||[]).forEach(t=>{
       evs.push({d:t.buyDate, ty:'买入', code:t.code, name:t.name, lbc:t.lbc, sh:t.shares, p:t.buyC, tag:'b'})
@@ -252,7 +276,7 @@ function drawChart(){
   var svg = document.getElementById('chart')
   if(!DATA) return
   var W = svg.clientWidth || 1000, H = 260, padL = 52, padR = 14, padT = 14, padB = 26
-  var series = DATA.strategies.map(s=>({id:s.id, name:s.name, pts:(s.daily||[]).map(e=>({d:e.d, v:e.cr*100}))}))
+  var series = mergedStrategies().map(s=>({id:s.id, name:s.name, pts:(s.daily||[]).map(e=>({d:e.d, v:e.cr*100}))}))
   /* ★ 按「日期」对齐，而不是按数组下标。各策略起点可能不同（日后从不同日期接入模拟，
      或手工改过 config.json 里某一套的 startDate），按下标切会把短序列拉伸到整幅、点位画错，
      短窗口下甚至整条曲线被切空而不显示。这里取所有策略日期的并集作为公共横轴。 */
