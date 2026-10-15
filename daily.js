@@ -23,6 +23,7 @@ const url = require('url')
 const M = require('./lib/strategy.js')
 const ST = require('./lib/store.js')
 const F = require('./lib/fetch.js')
+const SIM = require('./lib/sim.js')
 
 const ROOT = __dirname
 const DATA = path.join(ROOT, 'data')
@@ -85,58 +86,7 @@ async function notify (title, content) {
   return out
 }
 
-/* ---------------- 单套策略：从起点重放到最新 ---------------- */
-function runStrategy (store, strat, startDate, initialCash) {
-  const startIdx = store.dates.indexOf(startDate)
-  if (startIdx < 0) throw new Error('起点 ' + startDate + ' 不在数据集里（' + store.dates[0] + ' ~ ' + store.dates[store.dates.length - 1] + '）')
-  const P = Object.assign({}, strat.params, {
-    initialCash, startIdx, endIdx: store.dates.length - 1
-  })
-  const r = M.runBacktest(store, P)
-  if (r.error) throw new Error(r.error)
-
-  const eq = r.equity
-  const today = eq[eq.length - 1]
-  const prev = eq.length > 1 ? eq[eq.length - 2] : null
-  const initC = Math.round(initialCash * 100)
-
-  const todayTrades = (r.trades || []).filter(t => t.sellDate === today.date)
-  const todayBuys = (r.openPositions || []).filter(p => p.buyDate === today.date)
-  const skippedToday = (r.skipped || []).filter(s => s.date === today.date)
-
-  return {
-    id: strat.id, name: strat.name, params: P,
-    date: today.date,
-    totalC: today.totalC,
-    cashC: today.cashC,
-    mvC: today.mvC,
-    dayPnlC: prev ? today.totalC - prev.totalC : 0,
-    dayRet: prev ? today.totalC / prev.totalC - 1 : 0,
-    cumPnlC: today.totalC - initC,
-    cumRet: today.totalC / initC - 1,
-    equityDays: eq.length,
-    tradeCount: r.summary.tradeCount,
-    winRate: r.summary.winRate,
-    maxDrawdown: r.summary.maxDrawdown,
-    positions: r.openPositions || [],
-    nextCandidates: r.nextDayCandidates || [],
-    todayTrades, todayBuys, skippedToday,
-    equityTail: eq.slice(-10),
-    /* 全量序列（线上页面用）：每日净值曲线 + 全部成交记录 */
-    equityFull: eq.map((e, i) => ({
-      d: e.date, tc: e.totalC,
-      dp: i > 0 ? e.totalC - eq[i - 1].totalC : 0,
-      dr: i > 0 ? e.totalC / eq[i - 1].totalC - 1 : 0,
-      cr: e.totalC / initC - 1
-    })),
-    tradesFull: (r.trades || []).map(t => ({
-      code: t.code, name: t.name, lbc: t.lbc, shares: t.shares,
-      buyDate: t.buyDate, buyC: t.buyC,
-      sellDate: t.sellDate, sellC: t.sellC,
-      pnlC: t.pnlC, pnlPct: t.pnlPct, reason: t.reason
-    }))
-  }
-}
+/* 单套策略重放已迁至 lib/sim.js（daily 与 intraday 共用单一真源；M2 也在这里） */
 
 /* ---------------- 日报 ---------------- */
 function buildReport (date, results, meta) {
@@ -154,14 +104,24 @@ function buildReport (date, results, meta) {
   L.push('| 策略 | 当日盈亏 | 当日收益率 | 累计收益率 | 总资产 | 持仓 | 累计笔数 |')
   L.push('|---|---|---|---|---|---|---|')
   results.forEach(r => {
+    const slotTxt = r.params.slots != null ? r.positions.length + '/' + r.params.slots : String(r.positions.length)
     L.push('| ' + r.id + ' · ' + r.name + ' | ' + yuan(r.dayPnlC) + ' | ' + pct(r.dayRet) +
-      ' | **' + pct(r.cumRet) + '** | ' + money(r.totalC) + ' | ' + r.positions.length + '/' + r.params.slots + ' | ' + r.tradeCount + ' |')
+      ' | **' + pct(r.cumRet) + '** | ' + money(r.totalC) + ' | ' + slotTxt + ' | ' + r.tradeCount + ' |')
   })
   L.push('')
 
   results.forEach(r => {
     L.push('## ' + r.id + ' · ' + r.name)
     L.push('')
+    /* M2 专属：今天跟随谁、依据、切换轨迹 */
+    if (r.m2) {
+      const m = r.m2
+      L.push('- **今日跟随：' + m.pickToday.name + '**（依据：昨日收盘时，' +
+        m.trace.map(x => x.name + ' 近10日 ' + (x.ret == null ? '—' : pct(x.ret))).join('，') + '，取最强）')
+      L.push('- 近30个交易日切换：' + m.switches.map(s => s.date.slice(5) + '→' + s.name).join(' · '))
+      L.push('- ' + m.ref)
+      L.push('')
+    }
     L.push('- 当日：**' + yuan(r.dayPnlC) + ' 元**（' + pct(r.dayRet) + '）　累计：**' + yuan(r.cumPnlC) + ' 元**（' + pct(r.cumRet) + '）')
     L.push('- 总资产 ' + money(r.totalC) + ' 元 = 现金 ' + money(r.cashC) + ' + 市值 ' + money(r.mvC))
     L.push('- 累计胜率 ' + (r.tradeCount ? (r.winRate * 100).toFixed(1) + '%' : '—') + '　最大回撤 ' + (r.maxDrawdown * 100).toFixed(2) + '%')
@@ -313,13 +273,9 @@ async function main () {
 
   if (!DRY && (!noNewDay || repaired)) ST.save(STORE_FILE, store)
 
-  /* --- 2. 两套策略重放 --- */
+  /* --- 2. 策略重放（M2 在前，见 lib/sim.js） --- */
   const date = store.dates[store.dates.length - 1]
-  const results = cfg.strategies.map(s => {
-    try { return runStrategy(store, s, cfg.startDate, cfg.initialCash) }
-    catch (e) { console.log('  ✗ 策略 ' + s.id + ' 失败：' + e.message); return null }
-  }).filter(Boolean)
-  if (!results.length) throw new Error('没有任何策略跑成功')
+  const results = SIM.computeAll(store, cfg).results
 
   results.forEach(r => {
     console.log('  [' + r.id + '] ' + date + ' 当日 ' + yuan(r.dayPnlC) + '（' + pct(r.dayRet) + '）累计 ' + pct(r.cumRet) +
@@ -357,11 +313,13 @@ async function main () {
       startDate: cfg.startDate, initialCash: cfg.initialCash,
       strategies: results.map(r => ({
         id: r.id, name: r.name,
-        brief: (r.params.slots != null ? r.params.slots + ' 份 · ' : '')
+        brief: r.m2 ? SIM.M2_BRIEF
+          : (r.params.slots != null ? r.params.slots + ' 份 · ' : '')
           + '连板 ' + r.params.minLbc + '<N<' + r.params.maxLbc
           + ' · 止损 ' + r.params.stopLossPct + '% · 回撤 ' + r.params.trailPct + '% · 断板即出（T+1：次日起 14:57 判定 / 集合竞价成交）',
         slots: r.params.slots,
-        lbcRange: r.params.minLbc + '<N<' + r.params.maxLbc,
+        lbcRange: r.params.slots != null ? (r.params.minLbc + '<N<' + r.params.maxLbc) : '动态（跟随切换）',
+        m2: r.m2 || undefined,
         date: r.date,
         totalC: r.totalC, cashC: r.cashC, mvC: r.mvC,
         dayPnlC: r.dayPnlC, dayRet: r.dayRet,

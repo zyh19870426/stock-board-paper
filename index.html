@@ -45,6 +45,21 @@
   .nav a{color:var(--accent);text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:5px 12px;display:inline-block}
   .nav a:hover{border-color:var(--accent)}
   #err{display:none;background:rgba(240,74,74,.1);border:1px solid rgba(240,74,74,.4);color:var(--up);border-radius:8px;padding:12px;margin:14px 0;font-size:13px}
+  /* 盘中实时面板 */
+  .live{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin:16px 0 4px}
+  .live .hd{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .live .hd b{font-size:15px}
+  .badge{display:inline-block;padding:2px 10px;border-radius:12px;font-size:12px;font-weight:600}
+  .badge.trading{background:rgba(240,74,74,.15);color:var(--up)}
+  .badge.closed{background:rgba(143,160,191,.15);color:var(--tx2)}
+  .badge.pre-open,.badge.holiday{background:rgba(74,163,240,.12);color:var(--s1)}
+  .live .note{color:var(--tx2);font-size:11px;margin-top:3px}
+  .live .lv-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin-top:12px}
+  .live .lv{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+  .live .lv .nm{font-weight:600;margin-bottom:4px}
+  .live .lv .row{font-size:12px;color:var(--tx2);margin-top:2px}
+  .live .lv .row b{color:var(--tx)}
+  .pick{display:inline-block;background:rgba(192,132,252,.14);color:#c084fc;padding:1px 8px;border-radius:4px;font-size:12px;font-weight:600}
 </style>
 </head>
 <body>
@@ -53,6 +68,8 @@
   <div class="sub" id="sub">加载中…</div>
   <div class="nav"><a href="./backtest.html">策略回测（云端，可改任意参数）→</a></div>
   <div id="err"></div>
+
+  <div class="live" id="live" style="display:none"></div>
 
   <div class="winbar">
     <span style="color:var(--tx2);font-size:13px">收益曲线</span>
@@ -113,6 +130,49 @@ function fetchJSON(){
   })
 }
 
+/* ---------- 盘中实时（60s 轮询 data/intraday.json） ---------- */
+var LIVE = null
+function loadLive(){
+  fetch('./data/intraday.json?_='+Date.now(), {cache:'no-store'}).then(r=> r.ok ? r.json() : null)
+    .then(function(j){ LIVE = j; renderLive() }).catch(function(){ /* 无快照或网络抖动：保留上一次内容 */ })
+}
+function renderLive(){
+  var box = document.getElementById('live')
+  if(!LIVE || LIVE.phase==='holiday'){ box.style.display='none'; return }
+  var ph = { 'trading':['盘中实时','trading'], 'closed':['已收盘 · 以收盘跑为准','closed'], 'pre-open':['开盘前','pre-open'] }[LIVE.phase] || ['盘中','closed']
+  var h = '<div class="hd"><b>盘中实时</b><span class="badge '+ph[1]+'">'+ph[0]+'</span>'
+    + '<span style="color:var(--tx2);font-size:12px">'+cnDate(LIVE.bjDate)+' '+LIVE.bjTime+'</span>'
+    + '<span style="color:var(--tx2);font-size:11px;margin-left:auto">每 60 秒自动刷新 · 今开已定 ⇒ 开盘买入为真实成交价；现价随行情跳动</span></div>'
+  if(LIVE.note) h += '<div class="note">'+LIVE.note+'</div>'
+  if(LIVE.strategies && LIVE.strategies.length){
+    h += '<div class="lv-grid">'
+    LIVE.strategies.forEach(function(s){
+      h += '<div class="lv"><div class="nm">'+s.id+' · '+s.name
+        + (s.pickToday ? '　<span class="pick">今日跟随：'+s.pickToday+'</span>' : '')
+        + '　<span class="'+cls(s.dayRet)+'">'+pct(s.dayRet)+'</span>' + '</div>'
+      if(s.todayBuys && s.todayBuys.length){
+        h += s.todayBuys.map(function(b){ return '<div class="row">🔴 买入 <b>'+b.name+'</b> '+b.lbc+'板 '+b.shares+'股 @ <b>'+(b.buyC/100).toFixed(2)+'</b>（开盘成交）</div>' }).join('')
+      }
+      if(s.todaySells && s.todaySells.length){
+        h += s.todaySells.map(function(t){ return '<div class="row">🔵 卖出 <b>'+t.name+'</b> @ '+(t.sellC/100).toFixed(2)+'　<span class="'+cls(t.pnlC)+'">'+signYuan(t.pnlC)+'（'+pct(t.pnlPct)+'）</span> '+t.reason+'</div>' }).join('')
+      }
+      if(s.skippedToday && s.skippedToday.length){
+        h += s.skippedToday.map(function(x){ return '<div class="row">⊘ 弃买 '+x.name+'（'+x.reason+'）</div>' }).join('')
+      }
+      ;(s.positions||[]).forEach(function(p){
+        h += '<div class="row">持仓 <b>'+p.name+'</b> 现价 <b>'+(p.curC!=null?(p.curC/100).toFixed(2):'—')+'</b>　浮盈 <span class="'+cls(p.curPnlC)+'">'+(p.curPnlC!=null?signYuan(p.curPnlC)+' 元':'—')+'</span>'+(p.ztNow?' 🔒涨停中':'')+'</div>'
+      })
+      if(!s.todayBuys.length && !s.todaySells.length && !(s.positions||[]).length){
+        h += '<div class="row">今日暂无操作（候选 '+(s.nextCandidates?s.nextCandidates.length:0)+' 只待明日开盘）</div>'
+      }
+      h += '</div>'
+    })
+    h += '</div>'
+  }
+  box.innerHTML = h
+  box.style.display = 'block'
+}
+
 function render(d){
   DATA = d
   var dateCN = cnDate(d.date)
@@ -126,6 +186,16 @@ function render(d){
   var h = ''
   d.strategies.forEach(s=>{
     h += '<div class="stitle" style="border-color:'+colorOf(s.id)+'">'+s.name+'　<small style="color:var(--tx2);font-weight:400">'+s.brief+'</small></div>'
+    /* M2 专属：今日跟随谁 + 依据（收盘口径） */
+    if(s.m2){
+      h += '<div class="cards"><div class="card" style="grid-column:1/-1">'
+        + '<div class="t">今日跟随</div>'
+        + '<div class="v"><span class="pick">'+s.m2.pickToday.name+'</span></div>'
+        + '<div class="m">' + s.m2.trace.map(function(x){ return x.name+' 近10日 <span class="'+cls(x.ret)+'">'+(x.ret==null?'—':pct(x.ret))+'</span>' }).join('　·　')
+        + '　→ 取最强</div>'
+        + '<div class="m" style="margin-top:3px">'+s.m2.ref+'</div>'
+        + '</div></div>'
+    }
     h += '<div class="cards">'
       + card('当日盈亏', signYuan(s.dayPnlC)+' 元', cls(s.dayPnlC), '当日收益率 '+pct(s.dayRet))
       + card('累计收益率', pct(s.cumRet), cls(s.cumRet), '累计盈亏 '+signYuan(s.cumPnlC)+' 元')
@@ -230,6 +300,8 @@ function drawChart(){
   svg.innerHTML = g
 }
 
+loadLive()
+setInterval(loadLive, 60000)
 fetchJSON()
 </script>
 </body>
