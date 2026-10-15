@@ -21,6 +21,7 @@ const path = require('path')
 const ST = require('./lib/store.js')
 const SIM = require('./lib/sim.js')
 const Q = require('./lib/quote.js')
+const RL = require('./lib/rolling.js')
 
 const ROOT = __dirname
 const DATA = path.join(ROOT, 'data')
@@ -73,8 +74,10 @@ function buildMorning (bjDate, hhmm, strategies) {
   if (m2.trace) L.push('依据：' + m2.trace.map(x => x.name + ' 近10日 ' + (x.ret == null ? '—' : pct(x.ret))).join('，') + ' → 取最强')
   L.push('')
   if (m2.todayBuys && m2.todayBuys.length) {
-    L.push('**买入（开盘价附近挂单）**')
+    L.push('**买入（09:30–09:33 挂单，越早越接近竞价开盘价）**')
     m2.todayBuys.forEach(b => L.push('- ' + b.code + ' ' + b.name + '　' + b.lbc + '板　' + b.shares + '股　参考价 ' + (b.buyC / 100).toFixed(2)))
+    L.push('')
+    L.push('> ⏱ 别追价：实测 09:30–9:35 相对开盘价平均仅 +0.35%（双向对称），但越晚单笔波动越大（±5~10%）。')
     L.push('')
   } else {
     L.push('**买入：今日无（候选 ' + ((m2.nextCandidates || []).length) + ' 只，见昨日清单）**')
@@ -187,11 +190,16 @@ async function main () {
     })
   }))
 
+  /* --- 5. 滚动验证（同一 synth 数据集 ⇒ 状态也随盘中最新价更新） --- */
+  let rolling = null
+  try { rolling = RL.rollingCheck(synth, { slip: 0 }) } catch (e) { console.log('  ⚠️ 滚动验证失败（不影响主流程）：' + e.message) }
+
   writeOut({
     updated: new Date().toISOString(),
     bjDate: BJ.date, bjTime: hhmm, phase,
     note: phase === 'trading' ? '盘中预演：今开已定 ⇒ 开盘买入为真实成交价；现价随行情跳动，以收盘跑（daily.js）为准'
       : '已收盘预演快照，正式账户以收盘跑为准',
+    rolling: rolling || undefined,
     strategies
   })
   /* ★ 开盘首帧（09:25–09:45）推一次「今日执行清单」——半自动下单用，同日去重 */

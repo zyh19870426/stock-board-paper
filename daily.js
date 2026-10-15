@@ -24,6 +24,8 @@ const M = require('./lib/strategy.js')
 const ST = require('./lib/store.js')
 const F = require('./lib/fetch.js')
 const SIM = require('./lib/sim.js')
+const RL = require('./lib/rolling.js')
+const ML = require('./lib/minute-log.js')
 
 const ROOT = __dirname
 const DATA = path.join(ROOT, 'data')
@@ -98,7 +100,24 @@ function buildReport (date, results, meta) {
   L.push('> 数据集：' + meta.storeRange + '（' + meta.storeDays + ' 个交易日 / ' + meta.storeStocks + ' 只票，滚动累积）')
   L.push('> 生成时间 ' + ts())
   L.push('')
-
+  if (meta.rolling) {
+    const rr = meta.rolling
+    const badge = rr.status === 'green' ? '🟢 方向成立' : rr.status === 'watch' ? '🟡 观察中' : rr.status === 'degrade' ? '🔴 建议降级' : '⚪ 样本不足'
+    L.push('## 〇、滚动验证（每 20 交易日复检）')
+    L.push('')
+    L.push('> ' + badge + ' —— ' + rr.note)
+    L.push('>')
+    L.push('> 为什么不是「显著性检验」：日波动 5.29%、日均超额 0.199% ⇒ 同效应需 n≈2831 交易日（11.3 年）才可能显著，' +
+      '打板策略上这个检验**不可能达成**。所以改用「监控何时失效」替代「一次性证明有效」——2~3 个月就能有答案。')
+    L.push('>')
+    if (rr.recent) {
+      L.push('> 近 20 交易日：M2 ' + pct(rr.recent.m2) + ' vs 静态最强（' + rr.staticName + '）' + pct(rr.recent.static) +
+        ' ⇒ 超额 **' + pct(rr.recent.diff) + '**')
+    }
+    L.push('> 连续跑输：' + rr.streak + ' 个窗口（累计 ' + pct(rr.cumUnder) + '）　多窗口方向：' +
+      rr.direction.map(d => d.win + '日 ' + pct(d.ret)).join(' / ') + '（' + rr.direction.filter(d => d.ret > 0).length + '/' + rr.direction.length + ' 为正）')
+    L.push('')
+  }
   L.push('## 一、收益一览')
   L.push('')
   L.push('| 策略 | 当日盈亏 | 当日收益率 | 累计收益率 | 总资产 | 持仓 | 累计笔数 |')
@@ -189,13 +208,18 @@ function buildReport (date, results, meta) {
  *   明确告诉用户「今天做什么板 / 买哪几只 / 卖哪几只 / 各占多少资金」，
  *   让人可以照着在券商 App / QMT 里手动下单（半自动模式）。
  *   收益与口径提醒放在末尾，避免误导按回测数字定预期。 */
-function buildPush (date, results) {
+function buildPush (date, results, rolling) {
   const L = []
   const m2 = results.filter(r => r.m2)[0]
   const others = results.filter(r => !r.m2)
 
   L.push('### 打板模拟跟进 · ' + date)
   L.push('')
+  if (rolling) {
+    const badge = rolling.status === 'green' ? '🟢 方向成立' : rolling.status === 'watch' ? '🟡 观察中' : rolling.status === 'degrade' ? '🔴 建议降级' : '⚪ 样本不足'
+    L.push('**滚动验证：' + badge + '** —— ' + rolling.note)
+    L.push('')
+  }
 
   if (m2) {
     const pick = m2.m2.pickToday
@@ -230,6 +254,7 @@ function buildPush (date, results) {
       L.push('> 共 ' + m2.params.slots + ' 个名额（' + budget + '）；' +
         (m2.params.skipLimitOpen ? '一字涨停开盘买不进则弃买' : '') +
         '；已持仓 ' + m2.positions.length + ' 笔')
+      L.push('> ⏱ **挂单时点建议：09:30–09:33**（越早越接近竞价开盘价）。实测 09:30–9:35 买入相对开盘价平均仅 +0.35%、双向对称，但越晚单笔波动越大（±5~10%）⇒ 尽早挂、别追价。')
     } else {
       L.push('- _无候选（当日无符合板数区间的票，或名额已满）_')
     }
@@ -340,18 +365,48 @@ async function main () {
       ' 总资产 ' + money(r.totalC) + ' 持仓 ' + r.positions.length + ' 笔数 ' + r.tradeCount)
   })
 
+  /* ★ 滚动验证（每 20 交易日复检）：把「证明有效」换成「监控何时失效」。
+   *   统计显著性在打板策略上不可达（同效应需 ~2831 交易日），故用制度监控替代。
+   *   结果随 meta 进日报 + 写入 dashboard.json 顶部常驻状态 + data/rolling.json 留痕。 */
+  let rolling = null
+  try {
+    rolling = RL.rollingCheck(store, { slip: 0 })
+    console.log('  滚动验证：' + rolling.status.toUpperCase() + ' —— ' + rolling.note)
+  } catch (e) { console.log('  ⚠️ 滚动验证失败（不影响主流程）：' + e.message) }
+
+  /* ★ 当日分时增量采集：为「09:30–9:35 买入偏离」长期积累大样本。
+   *   数据源分钟线只回溯约 1 个月 ⇒ 只有每天顺手存，几个月后才有 n=200+。
+   *   只增不减、按 code+date 去重；失败绝不影响主流程。 */
+  let minuteLog = null
+  if (!DRY && !noNewDay) {
+    try {
+      const items = []
+      results.forEach(r => {
+        const seen = new Set()
+        r.nextCandidates.forEach(c => { if (!seen.has(c.code)) { seen.add(c.code); items.push({ code: c.code, name: c.name, lbc: c.lbc }) } })
+        r.todayBuys.forEach(p => { if (!seen.has(p.code)) { seen.add(p.code); items.push({ code: p.code, name: p.name, lbc: p.lbc }) } })
+        r.positions.forEach(p => { if (!seen.has(p.code)) { seen.add(p.code); items.push({ code: p.code, name: p.name, lbc: p.lbc }) } })
+      })
+      minuteLog = await ML.collect(path.join(DATA, 'minute-history.json'), date, items, { budgetMs: 90 * 1000 })
+      console.log('  分时采集：+' + minuteLog.added + ' 条（库内共 ' + minuteLog.total + ' 条）' +
+        (minuteLog.failed.length ? '，失败 ' + minuteLog.failed.length + ' 只' : ''))
+    } catch (e) { console.log('  ⚠️ 分时采集失败（不影响主流程）：' + e.message) }
+  }
+
   const meta = {
     initialCash: cfg.initialCash,
     startDate: cfg.startDate,
     equityDays: results[0].equityDays,
     storeRange: store.dates[0] + ' ~ ' + date,
     storeDays: store.dates.length,
-    storeStocks: Object.keys(store.st).length
+    storeStocks: Object.keys(store.st).length,
+    rolling,
+    minuteLog
   }
 
   /* --- 3. 落盘 --- */
   const report = buildReport(date, results, meta)
-  const push = buildPush(date, results)
+  const push = buildPush(date, results, rolling)
   if (!DRY) {
     fs.mkdirSync(REPORTS, { recursive: true })
     if (!noNewDay) {
@@ -369,6 +424,7 @@ async function main () {
     fs.writeFileSync(path.join(DATA, 'dashboard.json'), JSON.stringify({
       updated: new Date().toISOString(), date,
       startDate: cfg.startDate, initialCash: cfg.initialCash,
+      rolling: rolling || undefined,
       strategies: results.map(r => ({
         id: r.id, name: r.name,
         brief: r.m2 ? SIM.M2_BRIEF
@@ -391,6 +447,25 @@ async function main () {
         todaySells: r.todayTrades.map(t => ({ code: t.code, name: t.name, sellC: t.sellC, pnlC: t.pnlC, pnlPct: t.pnlPct, reason: t.reason }))
       }))
     }), 'utf8')
+    /* ★ 滚动验证独立落盘：便于外部脚本 / 历史趋势追踪（dashboard.json 只保最新一次） */
+    if (rolling) {
+      const RF = path.join(DATA, 'rolling.json')
+      let hist = []
+      try { hist = JSON.parse(fs.readFileSync(RF, 'utf8')).history || [] } catch (e) { hist = [] }
+      const snap = {
+        at: rolling.at, status: rolling.status, note: rolling.note,
+        slip: rolling.slip, recent: rolling.recent, streak: rolling.streak, cumUnder: rolling.cumUnder,
+        direction: rolling.direction, staticKey: rolling.staticKey, staticName: rolling.staticName
+      }
+      const i = hist.findIndex(h => h.at === snap.at)
+      if (i >= 0) hist[i] = snap; else hist.push(snap)
+      fs.writeFileSync(RF, JSON.stringify({
+        updated: new Date().toISOString(),
+        latest: snap,
+        history: hist.slice(-120),
+        historyDiff: rolling.history
+      }, null, 1), 'utf8')
+    }
     fs.writeFileSync(path.join(REPORTS, 'summary.json'), JSON.stringify({
       updated: new Date().toISOString(), date,
       strategies: results.map(r => ({
