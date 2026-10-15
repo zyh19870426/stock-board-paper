@@ -1,38 +1,87 @@
 {
- "updated": "2026-10-15T06:15:55.887Z",
- "date": "2026-10-14",
+ "updated": "2026-10-15T08:12:30.268Z",
+ "date": "2026-10-15",
  "strategies": [
   {
    "id": "M2",
    "name": "跟随·近10日最强",
-   "date": "2026-10-14",
-   "totalC": 10000000,
-   "dayPnlC": 0,
-   "dayRet": 0,
-   "cumPnlC": 0,
-   "cumRet": 0,
+   "date": "2026-10-15",
+   "totalC": 9971536,
+   "dayPnlC": -28464,
+   "dayRet": -0.0028464000000000267,
+   "cumPnlC": -28464,
+   "cumRet": -0.0028464000000000267,
    "tradeCount": 0,
    "winRate": 0,
-   "maxDrawdown": 0,
-   "positions": [],
-   "nextCandidates": [
+   "maxDrawdown": 0.0028464,
+   "positions": [
     {
      "code": "603968",
      "name": "醋化股份",
+     "lbc": 3,
+     "shares": 3400,
+     "buyDate": "2026-10-15",
+     "buyC": 1430
+    }
+   ],
+   "nextCandidates": [
+    {
+     "code": "000530",
+     "name": "冰山冷热",
      "lbc": 3
     }
    ],
    "equityDates": [
-    "2026-10-14"
+    "2026-10-14",
+    "2026-10-15"
    ],
    "equityTotalC": [
-    10000000
+    10000000,
+    9971536
    ]
   },
   {
    "id": "S1",
    "name": "策略1 · 只买3板",
-   "date": "2026-10-14",
+   "date": "2026-10-15",
+   "totalC": 9971536,
+   "dayPnlC": -28464,
+   "dayRet": -0.0028464000000000267,
+   "cumPnlC": -28464,
+   "cumRet": -0.0028464000000000267,
+   "tradeCount": 0,
+   "winRate": 0,
+   "maxDrawdown": 0.0028464,
+   "positions": [
+    {
+     "code": "603968",
+     "name": "醋化股份",
+     "lbc": 3,
+     "shares": 3400,
+     "buyDate": "2026-10-15",
+     "buyC": 1430
+    }
+   ],
+   "nextCandidates": [
+    {
+     "code": "000530",
+     "name": "冰山冷热",
+     "lbc": 3
+    }
+   ],
+   "equityDates": [
+    "2026-10-14",
+    "2026-10-15"
+   ],
+   "equityTotalC": [
+    10000000,
+    9971536
+   ]
+  },
+  {
+   "id": "S2",
+   "name": "策略2 · 只买5板",
+   "date": "2026-10-15",
    "totalC": 10000000,
    "dayPnlC": 0,
    "dayRet": 0,
@@ -44,91 +93,98 @@
    "positions": [],
    "nextCandidates": [
     {
-     "code": "603968",
-     "name": "醋化股份",
-     "lbc": 3
+     "code": "002696",
+     "name": "百洋股份",
+     "lbc": 5
+    },
+    {
+     "code": "002343",
+     "name": "慈文传媒",
+     "lbc": 5
     }
    ],
    "equityDates": [
-    "2026-10-14"
+    "2026-10-14",
+    "2026-10-15"
    ],
    "equityTotalC": [
-    10000000
-   ]
-  },
-  {
-   "id": "S2",
-   "name": "策略2 · 只买5板",
-   "date": "2026-10-14",
-   "totalC": 10000000,
-   "dayPnlC": 0,
-   "dayRet": 0,
-   "cumPnlC": 0,
-   "cumRet": 0,
-   "tradeCount": 0,
-   "winRate": 0,
-   "maxDrawdown": 0,
-   "positions": [],
-   "nextCandidates": [],
-   "equityDates": [
-    "2026-10-14"
-   ],
-   "equityTotalC": [
+    10000000,
     10000000
    ]
   },
   {
    "id": "S3",
    "name": "配置 1",
-   "date": "2026-10-14",
-   "totalC": 10000000,
-   "dayPnlC": 0,
-   "dayRet": 0,
-   "cumPnlC": 0,
-   "cumRet": 0,
+   "date": "2026-10-15",
+   "totalC": 9832468,
+   "dayPnlC": -167532,
+   "dayRet": -0.016753200000000024,
+   "cumPnlC": -167532,
+   "cumRet": -0.016753200000000024,
    "tradeCount": 0,
    "winRate": 0,
-   "maxDrawdown": 0,
-   "positions": [],
-   "nextCandidates": [
+   "maxDrawdown": 0.0167532,
+   "positions": [
     {
      "code": "603533",
      "name": "掌阅科技",
-     "lbc": 1
+     "lbc": 1,
+     "shares": 3300,
+     "buyDate": "2026-10-15",
+     "buyC": 2951
     }
    ],
+   "nextCandidates": [],
    "equityDates": [
-    "2026-10-14"
+    "2026-10-14",
+    "2026-10-15"
    ],
    "equityTotalC": [
-    10000000
+    10000000,
+    9832468
    ]
   },
   {
    "id": "S4",
    "name": "配置 5",
-   "date": "2026-10-14",
-   "totalC": 10000000,
-   "dayPnlC": 0,
-   "dayRet": 0,
-   "cumPnlC": 0,
-   "cumRet": 0,
+   "date": "2026-10-15",
+   "totalC": 9980745,
+   "dayPnlC": -19255,
+   "dayRet": -0.0019255000000000244,
+   "cumPnlC": -19255,
+   "cumRet": -0.0019255000000000244,
    "tradeCount": 0,
    "winRate": 0,
-   "maxDrawdown": 0,
-   "positions": [],
-   "nextCandidates": [
+   "maxDrawdown": 0.0019255,
+   "positions": [
     {
      "code": "603968",
      "name": "醋化股份",
+     "lbc": 3,
+     "shares": 2300,
+     "buyDate": "2026-10-15",
+     "buyC": 1430
+    }
+   ],
+   "nextCandidates": [
+    {
+     "code": "000530",
+     "name": "冰山冷热",
+     "lbc": 3
+    },
+    {
+     "code": "001318",
+     "name": "阳光乳业",
      "lbc": 3
     }
    ],
    "equityDates": [
-    "2026-10-14"
+    "2026-10-14",
+    "2026-10-15"
    ],
    "equityTotalC": [
-    10000000
+    10000000,
+    9980745
    ]
   }
  ]
