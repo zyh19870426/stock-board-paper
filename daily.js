@@ -184,17 +184,75 @@ function buildReport (date, results, meta) {
   return L.join('\n')
 }
 
-/* ---------------- 推送用短文本 ---------------- */
+/* ---------------- 推送用短文本 ----------------
+ * ★ 2026-10-15 改造：以 M2 为「实盘执行清单」口径 ——
+ *   明确告诉用户「今天做什么板 / 买哪几只 / 卖哪几只 / 各占多少资金」，
+ *   让人可以照着在券商 App / QMT 里手动下单（半自动模式）。
+ *   收益与口径提醒放在末尾，避免误导按回测数字定预期。 */
 function buildPush (date, results) {
-  const L = ['### 打板模拟跟进 · ' + date, '']
-  results.forEach(r => {
-    L.push('**' + r.id + ' · ' + r.name + '**')
-    L.push('当日 ' + yuan(r.dayPnlC) + ' 元（' + pct(r.dayRet) + '）｜累计 ' + pct(r.cumRet) + '｜总资产 ' + money(r.totalC))
-    if (r.todayBuys.length) L.push('买入：' + r.todayBuys.map(p => p.name + ' ' + p.shares + '股').join('、'))
-    if (r.todayTrades.length) L.push('卖出：' + r.todayTrades.map(t => t.name + ' ' + pct(t.pnlPct)).join('、'))
-    if (r.nextCandidates.length) L.push('次日候选：' + r.nextCandidates.map(c => c.name + '(' + c.lbc + '板)').join('、'))
+  const L = []
+  const m2 = results.filter(r => r.m2)[0]
+  const others = results.filter(r => !r.m2)
+
+  L.push('### 打板模拟跟进 · ' + date)
+  L.push('')
+
+  if (m2) {
+    const pick = m2.m2.pickToday
+    L.push('## ★ M2 执行清单（跟随·近10日最强）')
     L.push('')
-  })
+    L.push('**今日做：' + pick.name + '**' + (pick.pause ? '（空仓）' : ''))
+    L.push('依据：' + m2.m2.trace.map(x => x.name + ' 近10日 ' + (x.ret == null ? '—' : pct(x.ret))).join('，') + ' → 取最强')
+    L.push('')
+    /* 今日实际动作（收盘跑口径：已执行/待执行） */
+    if (m2.todayBuys.length) {
+      L.push('**今日已买入**（开盘价成交）')
+      m2.todayBuys.forEach(p => L.push('- ' + p.code + ' ' + p.name + '　' + p.lbc + '板　' + p.shares + '股 @ ' + (p.buyC / 100).toFixed(2) + '　约 ' + money(p.costC) + ' 元'))
+      L.push('')
+    }
+    if (m2.todayTrades.length) {
+      L.push('**今日卖出**（14:57 集合竞价）')
+      m2.todayTrades.forEach(t => L.push('- ' + t.code + ' ' + t.name + '　' + t.shares + '股 @ ' + (t.sellC / 100).toFixed(2) + '　' + yuan(t.pnlC) + '（' + pct(t.pnlPct) + '）　' + t.reason))
+      L.push('')
+    }
+    if (m2.skippedToday.length) {
+      L.push('**今日弃买**：' + m2.skippedToday.map(s => s.code + ' ' + s.name + '（' + s.reason + '）').join('、'))
+      L.push('')
+    }
+    /* 明天要下的单 —— 这才是半自动模式真正要看的部分 */
+    L.push('**次日买入清单**（' + date + ' 收盘选出，下一交易日开盘执行）')
+    if (m2.nextCandidates.length) {
+      const budget = m2.params.allocMode === 'dynamic' ? '按次账资金动态分配' : '固定等分'
+      m2.nextCandidates.forEach((c, i) => {
+        L.push('- 第 ' + (i + 1) + ' 顺位　' + c.code + ' ' + c.name + '　' + c.lbc + '板　成交额 ' + ((c.amount || 0) / 1e8).toFixed(2) + ' 亿')
+      })
+      L.push('')
+      L.push('> 共 ' + m2.params.slots + ' 个名额（' + budget + '）；' +
+        (m2.params.skipLimitOpen ? '一字涨停开盘买不进则弃买' : '') +
+        '；已持仓 ' + m2.positions.length + ' 笔')
+    } else {
+      L.push('- _无候选（当日无符合板数区间的票，或名额已满）_')
+    }
+    L.push('')
+    L.push('**持仓**')
+    if (m2.positions.length) m2.positions.forEach(p => L.push('- ' + p.code + ' ' + p.name + '　' + p.lbc + '板　' + p.shares + '股　成本 ' + (p.buyC / 100).toFixed(2) + '（' + p.buyDate + '）'))
+    else L.push('- 空仓')
+    L.push('')
+    L.push('> 卖出规则：买入次日起，每交易日 14:57 看是否封住涨停，未封则挂收盘集合竞价卖出（成交价＝收盘价）')
+    L.push('')
+  }
+
+  if (others.length) {
+    L.push('---')
+    L.push('**参考：静态策略对照**')
+    others.forEach(r => {
+      L.push(r.id + ' ' + r.name + '　当日 ' + yuan(r.dayPnlC) + '（' + pct(r.dayRet) + '）累计 ' + pct(r.cumRet) + '　持仓 ' + r.positions.length + '/' + r.params.slots)
+    })
+    L.push('')
+  }
+
+  L.push('---')
+  L.push('⚠️ **预期校准**：回测 +307% 为零成本样本内上界；稳健性审计显示单边 0.5% 滑点即衰减至 +133%、单边 1% 仅 +11.8%，且剔掉最好的 10 个交易日收益降至 35%。请按保守口径看待，模拟盘非投资建议。')
   return L.join('\n')
 }
 

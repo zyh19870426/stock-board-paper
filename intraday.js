@@ -31,6 +31,11 @@ const OUT_FILE = path.join(DATA, 'intraday.json')
 const DRY = process.argv.includes('--dry')
 const BJ = ST.beijingNow(process.env.PAPER_NOW ? Date.parse(process.env.PAPER_NOW) : null)
 
+/* ★ 早盘执行清单推送（半自动模式）：只在「开盘第一帧」推一次，
+ *   告诉用户今天实际该在券商 App / QMT 里怎么下单。
+ *   去重：同一交易日只推一次（结果落盘 paper/data/.morning-push.json 由工作流提交）。 */
+const PUSH_STATE = path.join(ROOT, 'data', '.morning-push.json')
+
 const money = c => (c / 100).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const pct = v => (v > 0 ? '+' : '') + (v * 100).toFixed(2) + '%'
 const hhmm = String(Math.floor(BJ.min / 60)).padStart(2, '0') + ':' + String(BJ.min % 60).padStart(2, '0')
@@ -44,6 +49,65 @@ function writeOut (obj) {
   fs.mkdirSync(DATA, { recursive: true })
   fs.writeFileSync(OUT_FILE, JSON.stringify(obj), 'utf8')
   console.log('  已写 ' + path.relative(ROOT, OUT_FILE) + '（' + fs.statSync(OUT_FILE).size + ' B）')
+}
+
+/* ---------------- 早盘执行清单（半自动下单用） ---------------- */
+function post (u, body, headers) {
+  return new Promise((resolve, reject) => {
+    const url = require('url').parse(u)
+    const data = typeof body === 'string' ? body : JSON.stringify(body)
+    const req = require('https').request({
+      hostname: url.hostname, path: url.path, method: 'POST', timeout: 15000,
+      headers: Object.assign({ 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) }, headers || {})
+    }, res => { let b = ''; res.setEncoding('utf8'); res.on('data', d => (b += d)); res.on('end', () => resolve(b)) })
+    req.on('error', reject)
+    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')) })
+    req.write(data); req.end()
+  })
+}
+function buildMorning (bjDate, hhmm, strategies) {
+  const m2 = strategies.filter(s => s.id === 'M2')[0]
+  const L = ['### 🔔 M2 今日执行清单', '> ' + bjDate + ' ' + hhmm + '（开盘前，请人工下单价）', '']
+  if (!m2) return L.join('\n')
+  L.push('**今日做：' + m2.pickToday + '**')
+  if (m2.trace) L.push('依据：' + m2.trace.map(x => x.name + ' 近10日 ' + (x.ret == null ? '—' : pct(x.ret))).join('，') + ' → 取最强')
+  L.push('')
+  if (m2.todayBuys && m2.todayBuys.length) {
+    L.push('**买入（开盘价附近挂单）**')
+    m2.todayBuys.forEach(b => L.push('- ' + b.code + ' ' + b.name + '　' + b.lbc + '板　' + b.shares + '股　参考价 ' + (b.buyC / 100).toFixed(2)))
+    L.push('')
+  } else {
+    L.push('**买入：今日无（候选 ' + ((m2.nextCandidates || []).length) + ' 只，见昨日清单）**')
+    L.push('')
+  }
+  if (m2.todaySells && m2.todaySells.length) {
+    L.push('**卖出（14:57 前确认未封板则挂单）**')
+    m2.todaySells.forEach(t => L.push('- ' + t.code + ' ' + t.name + '　' + t.reason))
+    L.push('')
+  }
+  if (m2.positions && m2.positions.length) {
+    L.push('**持仓盯板（14:57 判定）**')
+    m2.positions.forEach(p => L.push('- ' + p.code + ' ' + p.name + '　现价 ' + (p.curC != null ? (p.curC / 100).toFixed(2) : '—') + (p.ztNow ? '　🔒涨停中' : '')))
+    L.push('')
+  }
+  L.push('> 未封板才卖，成交价≈收盘价；一字涨停开盘买不进则弃买。模拟盘非投资建议。')
+  return L.join('\n')
+}
+async function morningPush (bjDate, hhmm, strategies) {
+  const PP = process.env.PUSHPLUS_TOKEN, SC = process.env.SENDKEY, WC = process.env.WECOM_WEBHOOK
+  if (!PP && !SC && !WC) { console.log('  早盘推送：未配置渠道（跳过）'); return }
+  if (!DRY) {
+    let st = null
+    try { st = JSON.parse(fs.readFileSync(PUSH_STATE, 'utf8')) } catch (_) {}
+    if (st && st.date === bjDate) { console.log('  早盘推送：今日已推过（' + bjDate + '），跳过'); return }
+  }
+  const md = buildMorning(bjDate, hhmm, strategies)
+  const out = []
+  if (PP) { try { await post('https://www.pushplus.plus/send', { token: PP, title: 'M2 今日执行清单 · ' + bjDate, content: md, template: 'markdown' }); out.push('pushplus ok') } catch (e) { out.push('pushplus 失败:' + e.message) } }
+  if (SC) { try { await post('https://sctapi.ftqq.com/' + SC + '.send', { title: 'M2 今日执行清单 · ' + bjDate, desp: md }); out.push('serverchan ok') } catch (e) { out.push('serverchan 失败:' + e.message) } }
+  if (WC) { try { await post(WC, { msgtype: 'markdown', markdown: { content: md.slice(0, 4000) } }); out.push('wecom ok') } catch (e) { out.push('wecom 失败:' + e.message) } }
+  console.log('  早盘推送：' + out.join('；'))
+  if (!DRY) { fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(PUSH_STATE, JSON.stringify({ date: bjDate, at: new Date().toISOString() }), 'utf8') }
 }
 
 async function main () {
@@ -130,6 +194,10 @@ async function main () {
       : '已收盘预演快照，正式账户以收盘跑为准',
     strategies
   })
+  /* ★ 开盘首帧（09:25–09:45）推一次「今日执行清单」——半自动下单用，同日去重 */
+  if (phase === 'trading' && BJ.min <= 9 * 60 + 45) {
+    await morningPush(BJ.date, hhmm, strategies)
+  }
   console.log('  预演完成：' + strategies.map(s => s.id + ' ' + pct(s.dayRet)).join(' / ') + '，耗时 ' + Math.round((Date.now() - t0) / 1000) + 's')
 }
 
