@@ -87,6 +87,13 @@
   .winbar .wt{color:var(--tx2);font-size:12.5px}
   .winbar button{background:var(--panel);border:1px solid var(--line);color:var(--tx2);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12.5px}
   .winbar button.on{background:var(--panel2);color:var(--tx);border-color:var(--accent)}
+  /* M2 切换轨迹（折叠在详情卡片内，不再挤在曲线窗口按钮那一行） */
+  .swrow{margin-top:8px;padding-top:7px;border-top:1px dashed var(--line)}
+  .swsum{font-size:11px;color:var(--tx2);cursor:pointer;line-height:1.6}
+  .swsum b{color:var(--tx)}
+  .swsum:hover{color:var(--tx)}
+  .swsum .swmore{color:var(--accent);margin-left:4px}
+  .swfull{font-size:11px;color:var(--tx2);line-height:1.8;margin-top:5px;word-break:break-all}
   .winbar .rt{font-size:10.5px;color:var(--tx2);cursor:help;border-bottom:1px dotted var(--tx2)}
   .chartbox{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}
   .chartbox .chead{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:8px}
@@ -94,7 +101,6 @@
   .chartbox .chead .cl small{color:var(--tx2);font-weight:400;margin-left:5px;font-size:11px}
   .chartbox .chead .legend{margin-left:auto;display:flex;gap:13px;font-size:11.5px;color:var(--tx2);flex-wrap:wrap}
   .chartbox .chead .legend i{display:inline-block;width:16px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}
-  .replaytip{font-size:10.5px;color:var(--warn);background:rgba(217,119,6,.09);border:1px solid rgba(217,119,6,.3);border-radius:6px;padding:5px 9px;margin-top:8px;line-height:1.5}
 
   /* 详情区 */
   .stitle{margin:22px 0 8px;font-size:14.5px;font-weight:600;border-left:3px solid var(--accent);padding-left:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
@@ -114,17 +120,68 @@
   .planmsg{background:var(--panel);border:1px dashed var(--line);border-radius:9px;padding:14px;color:var(--tx2);font-size:12.5px;line-height:1.7}
   .foot{margin-top:24px;color:var(--tx2);font-size:11px;line-height:1.7}
   .foot b{color:var(--tx)}
+
+  /* ============ 移动端抽屉（≤900px） ============
+     PC 端侧边栏是常驻 sticky；手机上那样会变成一个挡在内容前的悬浮块、且页面在它后面滚动。
+     改成标准抽屉：默认隐藏 → 点按钮从左滑出 → 选中后自动收起。
+     实现用「transform 位移 + 遮罩」而非 display，保证有滑出动画。 */
+  .menubtn,.scrim{display:none}          /* PC 端不显示 */
+  @media(max-width:900px){
+    /* 触发按钮：固定在左上角（不随内容滚动） */
+    .menubtn{
+      display:flex;align-items:center;gap:6px;position:fixed;left:12px;top:12px;z-index:60;
+      background:var(--panel2);border:1px solid var(--line);border-radius:9px;
+      padding:8px 13px;color:var(--tx);font-size:13px;font-weight:600;cursor:pointer;
+      box-shadow:0 2px 10px rgba(0,0,0,.35);
+    }
+    .menubtn:active{background:var(--panel)}
+    .menubtn .cur{color:#c084fc}
+    /* 抽屉本体：固定定位 + 从左滑入 */
+    .side{
+      position:fixed;left:0;top:0;bottom:0;z-index:70;
+      width:min(78vw,300px);border-radius:0 14px 14px 0;border-left:none;
+      padding:14px;overflow-y:auto;-webkit-overflow-scrolling:touch;
+      transform:translateX(-105%);transition:transform .22s ease;
+      box-shadow:6px 0 24px rgba(0,0,0,.45);
+    }
+    .side.open{transform:translateX(0)}
+    /* 遮罩：抽屉打开时盖住主内容，点它关闭 */
+    .scrim{
+      display:block;position:fixed;inset:0;z-index:65;background:rgba(0,0,0,.5);
+      opacity:0;pointer-events:none;transition:opacity .22s ease;
+    }
+    .scrim.open{opacity:1;pointer-events:auto}
+    /* 抽屉里给「关闭」留个明确出口 */
+    .side .sclose{display:flex;justify-content:flex-end;margin-bottom:6px}
+    .side .sclose button{background:var(--panel2);border:1px solid var(--line);color:var(--tx2);
+      border-radius:7px;padding:5px 11px;font-size:12px;cursor:pointer}
+    /* 给固定按钮让出顶部空间，避免压住标题 */
+    body{padding-top:62px}
+    .layout{gap:0}
+  }
+  /* 抽屉关闭按钮在 PC 端隐藏 */
+  .side .sclose{display:none}
+  @media(max-width:900px){ .side .sclose{display:flex} }
 </style>
 </head>
 <body>
+
+<!-- 移动端：抽屉触发按钮（PC 端隐藏）。显示当前策略，点了从左滑出策略列表 -->
+<button class="menubtn" id="menubtn" aria-label="打开策略列表">
+  <span style="font-size:15px;line-height:1">☰</span><span>策略</span><span class="cur" id="menucur">M2</span>
+</button>
+<!-- 移动端：抽屉遮罩，点它收起 -->
+<div class="scrim" id="scrim"></div>
+
 <div class="layout">
 
-  <!-- ==================== 左侧：策略侧边栏 ==================== -->
-  <aside class="side">
+  <!-- ==================== 左侧：策略侧边栏（PC 常驻 sticky / 手机抽屉） ==================== -->
+  <aside class="side" id="side">
+    <div class="sclose"><button id="sideclose">收起 ✕</button></div>
     <div class="sh">策略列表</div>
     <div id="sidelist"></div>
     <div class="snote">
-      <div>点选任意策略 → 右侧看该套详情</div>
+      <div>点选任意策略 → 看该套详情</div>
       <div style="margin-top:5px">看板默认停在 <b style="color:#c084fc">M2</b>（跟随·近10日最强）</div>
       <div style="margin-top:5px">各策略独立 10 万本金、互不干扰</div>
       <div style="margin-top:5px"><a href="./backtest.html" style="color:var(--accent)">策略回测（可改任意参数）→</a></div>
@@ -153,7 +210,6 @@
       <button data-w="7">7天</button><button data-w="30">30天</button>
       <button data-w="60">60天</button><button data-w="90">90天</button>
       <button data-w="0" class="on">全部</button>
-      <span class="rt" id="switchinfo" style="display:none"></span>
     </div>
     <div class="chartbox">
       <div class="chead">
@@ -161,7 +217,6 @@
         <span class="legend" id="legend"></span>
       </div>
       <svg id="chart" width="100%" height="250" preserveAspectRatio="none"></svg>
-      <div class="replaytip" id="replaytip" style="display:none"></div>
     </div>
 
     <!-- 详情区（随侧边栏切换） -->
@@ -170,7 +225,7 @@
     <div class="foot">
       <b>口径</b>：T 日收盘选股 → T+1 开盘价买入（一字涨停弃买）→ <b>买入当日不可卖出（A 股 T+1），断板判定从买入次日起</b> → 断板即出（<b>14:57 判定，未封则在收盘集合竞价挂单，成交价＝收盘价</b>）/ 止损 / 回撤 / 最长 10 个交易日。<br>
       <b>T+1 依据</b>：A 股当日买入的股票当日不可卖出，所以「断板即出」实际是 <b>T+2 起</b>每个交易日 14:57 看是否封住涨停、没封才卖 —— 回测完全按此执行（0 笔当日买卖）。<br>
-      <b>曲线口径</b>：模拟账户从上线日（<span id="fStart">—</span>）起跑；为避免上线即空白，曲线用<b>完全相同参数</b>从数据集可回测起点回放（<span id="fReplay">—</span> 起），页面已标注「回放」段。回放末段与真实账户口径一致，可无缝衔接。<br>
+      <b>曲线口径</b>：模拟账户从上线日（<span id="fStart">—</span>）起跑 —— 上线日常恰好是数据集的最后一天，逐日累积只有 1 个点、画不出形状，所以曲线改用<b>完全相同参数</b>从数据集可回测起点（<span id="fReplay">—</span>）回放至今，展示<b>这套策略历史上是怎么走的</b>（图上以虚线标注「回放」）。回放末段与真实账户口径完全一致，随模拟盘推进可无缝衔接 —— 即：<b>曲线左侧是回放，越靠右越接近真实账户</b>。<br>
       模拟盘按开盘价 / 集合竞价价理想成交，未计滑点与冲击成本；数据由每日收盘后自动任务生成，不构成投资建议。
     </div>
   </main>
@@ -270,9 +325,29 @@ function renderSide(){
       + '</div>'
   }).join('')
   box.querySelectorAll('.sitem').forEach(function(el){
-    el.onclick = function(){ CUR = this.dataset.id; renderSide(); renderHero(); renderLive(); renderDetail(); drawChart() }
+    el.onclick = function(){
+      CUR = this.dataset.id
+      var mc = document.getElementById('menucur'); if(mc) mc.textContent = CUR
+      renderSide(); renderHero(); renderLive(); renderDetail(); drawChart()
+      closeSide()          /* ★ 手机上选完自动收起抽屉，让详情立刻可见 */
+    }
   })
 }
+
+/* ---------- 移动端抽屉开合 ----------
+ * PC 端：.side 是常驻 sticky，这些操作无副作用（class 加了也不影响 grid 布局）。
+ * 手机端：默认 transform 移出屏幕，open 才滑入；遮罩点击/选策略/按 ESC 均可关闭。 */
+function openSide(){
+  document.getElementById('side').classList.add('open')
+  document.getElementById('scrim').classList.add('open')
+  document.documentElement.style.overflow = 'hidden'   /* 抽屉打开时锁定背景滚动 */
+}
+function closeSide(){
+  document.getElementById('side').classList.remove('open')
+  document.getElementById('scrim').classList.remove('open')
+  document.documentElement.style.overflow = ''
+}
+function sideIsOpen(){ return document.getElementById('side').classList.contains('open') }
 
 /* ---------- 顶部核心指标（只显示当前选中策略，默认 M2） ---------- */
 function renderHero(){
@@ -305,7 +380,7 @@ function renderDetail(){
   var c = colorOf(s.id)
   var h = '<div class="stitle" style="border-color:'+c+'">'+s.id+' · '+s.name+' 详情<small>'+esc(s.brief)+'</small></div>'
 
-  /* M2 专属：今日跟随谁 + 依据 */
+  /* M2 专属：今日跟随谁 + 依据（切换轨迹折叠在卡片内） */
   if(s.m2){
     h += '<div class="cards" style="display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:12px"><div class="card" style="background:var(--panel)">'
       + '<div class="t">今日跟随</div>'
@@ -313,6 +388,7 @@ function renderDetail(){
       + '<div class="m">' + s.m2.trace.map(function(x){ return x.name+' 近10日 <span class="'+cls(x.ret)+'">'+(x.ret==null?'—':pct(x.ret))+'</span>' }).join('　·　')
       + '　→ 取最强</div>'
       + '<div class="m" style="margin-top:3px">'+s.m2.ref+'</div>'
+      + switchInfoHTML()
       + '</div></div>'
   }
 
@@ -473,14 +549,30 @@ function render(d){
   drawChart()
 }
 
-/* M2 切换轨迹（近 30 日变化点） */
-function renderSwitchInfo(){
-  var el = document.getElementById('switchinfo')
+/* M2 切换轨迹（近 30 日变化点）
+ * ★ 位置：原先贴在「收益曲线」窗口按钮那一行，又长又挤（10 段轨迹把窗口按钮顶开）。
+ *   现改为渲染进 M2 详情卡片内，且默认折叠成一行摘要，点开才看全轨迹。 */
+function switchInfoHTML(){
   var s = stratById('M2')
-  if(!s || !s.m2 || !s.m2.switches || s.m2.switches.length<2){ el.style.display='none'; return }
-  el.style.display='inline'
-  el.title = 'M2 近 30 个交易日的跟随切换轨迹（只列变化点）：昨日收盘按近 10 日净值涨幅重新排名，最强者即今日执行'
-  el.innerHTML = 'M2 切换：' + s.m2.switches.map(function(x){ return mmdd(x.date)+' '+x.name }).join(' → ')
+  if(!s || !s.m2 || !s.m2.switches || s.m2.switches.length<2) return ''
+  var sw = s.m2.switches
+  var head = sw[0], tail = sw[sw.length-1]
+  var trace = sw.map(function(x){ return mmdd(x.date)+' '+x.name }).join(' → ')
+  return '<div class="swrow" id="swrow">'
+    + '<div class="swsum" id="swsum" title="M2 近 30 个交易日的跟随切换轨迹（只列变化点）：昨日收盘按近 10 日净值涨幅重新排名，最强者即今日执行">'
+    + '切换轨迹：<b>'+sw.length+'</b> 段 · 从 <b>'+head.name+'</b>（'+mmdd(head.date)+'）到 <b>'+tail.name+'</b>（'+mmdd(tail.date)+'）　<span class="swmore">展开 ▾</span></div>'
+    + '<div class="swfull" id="swfull" style="display:none">'+trace+'</div>'
+    + '</div>'
+}
+function renderSwitchInfo(){
+  /* 折叠/展开交互（详情区每次重渲后需重新绑定） */
+  var sum = document.getElementById('swsum')
+  if(sum) sum.onclick = function(){
+    var f = document.getElementById('swfull')
+    var open = f.style.display !== 'none'
+    f.style.display = open ? 'none' : 'block'
+    this.querySelector('.swmore').textContent = open ? '展开 ▾' : '收起 ▴'
+  }
 }
 
 /* ---------- 收益曲线（累计收益率 %；用全区间回放曲线，避免上线即空白） ---------- */
@@ -565,13 +657,11 @@ function drawChart(){
   document.getElementById('legend').innerHTML =
     '<span>'+(focus.replay?'<i style="background:repeating-linear-gradient(90deg,'+fc+' 0 6px,transparent 6px 9px)"></i>':'<i style="background:'+fc+'"></i>')+focus.id+'（回放）</span>'
     + series.filter(function(s){ return s.id!==CUR }).map(function(s){ return '<span><i style="background:'+colorOf(s.id)+';opacity:.45"></i>'+s.id+'</span>' }).join('')
-  var tip = document.getElementById('replaytip')
-  if(useReplay){
-    tip.style.display='block'
-    tip.innerHTML = '⚠️ <b>曲线口径＝回放</b>：模拟账户 '+DATA.startDate+' 起跑（＝数据集最后一天），逐日累积只有 1 个点、画不出形状。'
-      + '此曲线用<b>完全相同参数</b>从 <b>'+(DATA.replayStart||'—')+'</b> 回放至今（'+focus.pts.length+' 个交易日），'
-      + '展示「这套策略历史上是怎么走的」。回放末段与真实账户口径一致，随模拟盘推进可无缝衔接。'
-  } else { tip.style.display='none' }
+  /* ★ 原「曲线下方橙色长框」已移除（内容与底部「曲线口径」重复、手机上占地）。
+     这里只把动态项（回放真实起点/交易日数）回填到底部说明里，保持单一处、不重复。 */
+  var fsEl = document.getElementById('fStart'), frEl = document.getElementById('fReplay')
+  if(fsEl) fsEl.textContent = DATA.startDate || '—'
+  if(frEl) frEl.textContent = DATA.replayStart || '—'
 }
 
 document.querySelectorAll('.winbar button').forEach(function(b){
@@ -580,7 +670,17 @@ document.querySelectorAll('.winbar button').forEach(function(b){
     this.classList.add('on'); WIN = +this.dataset.w; drawChart()
   }
 })
-window.addEventListener('resize', function(){ if(DATA) drawChart() })
+window.addEventListener('resize', function(){
+  if(DATA) drawChart()
+  /* ★ 从手机宽度转回 PC 宽度时，抽屉的 open 状态会遗留（overflow 锁死、遮罩残留）⇒ 强制收干净 */
+  if(window.innerWidth > 900 && sideIsOpen()) closeSide()
+})
+
+/* ---------- 移动端抽屉事件 ---------- */
+document.getElementById('menubtn').onclick = function(){ sideIsOpen() ? closeSide() : openSide() }
+document.getElementById('scrim').onclick = closeSide
+document.getElementById('sideclose').onclick = closeSide
+document.addEventListener('keydown', function(e){ if(e.key === 'Escape' && sideIsOpen()) closeSide() })
 
 loadLive()
 setInterval(loadLive, 60000)
