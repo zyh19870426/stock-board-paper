@@ -26,6 +26,7 @@ const F = require('./lib/fetch.js')
 const SIM = require('./lib/sim.js')
 const RL = require('./lib/rolling.js')
 const ML = require('./lib/minute-log.js')
+const MC = require('./lib/minute-chart.js')
 
 const ROOT = __dirname
 const DATA = path.join(ROOT, 'data')
@@ -380,19 +381,27 @@ async function main () {
    *   数据源分钟线只回溯约 1 个月 ⇒ 只有每天顺手存，几个月后才有 n=200+。
    *   只增不减、按 code+date 去重；失败绝不影响主流程。 */
   let minuteLog = null
+  let minuteChart = null
   if (!DRY && !noNewDay) {
+    const items = []
+    results.forEach(r => {
+      const seen = new Set()
+      r.nextCandidates.forEach(c => { if (!seen.has(c.code)) { seen.add(c.code); items.push({ code: c.code, name: c.name, lbc: c.lbc }) } })
+      r.todayBuys.forEach(p => { if (!seen.has(p.code)) { seen.add(p.code); items.push({ code: p.code, name: p.name, lbc: p.lbc }) } })
+      r.positions.forEach(p => { if (!seen.has(p.code)) { seen.add(p.code); items.push({ code: p.code, name: p.name, lbc: p.lbc }) } })
+    })
     try {
-      const items = []
-      results.forEach(r => {
-        const seen = new Set()
-        r.nextCandidates.forEach(c => { if (!seen.has(c.code)) { seen.add(c.code); items.push({ code: c.code, name: c.name, lbc: c.lbc }) } })
-        r.todayBuys.forEach(p => { if (!seen.has(p.code)) { seen.add(p.code); items.push({ code: p.code, name: p.name, lbc: p.lbc }) } })
-        r.positions.forEach(p => { if (!seen.has(p.code)) { seen.add(p.code); items.push({ code: p.code, name: p.name, lbc: p.lbc }) } })
-      })
       minuteLog = await ML.collect(path.join(DATA, 'minute-history.json'), date, items, { budgetMs: 90 * 1000 })
       console.log('  分时采集：+' + minuteLog.added + ' 条（库内共 ' + minuteLog.total + ' 条）' +
         (minuteLog.failed.length ? '，失败 ' + minuteLog.failed.length + ' 只' : ''))
     } catch (e) { console.log('  ⚠️ 分时采集失败（不影响主流程）：' + e.message) }
+    /* ★ 分时图序列采集（画「今日操作股票」的当日分时图）：
+     *   与上面的汇总采集同源（新浪 scale=5），但存整条 48 根序列。只留最近 8 个交易日。 */
+    try {
+      minuteChart = await MC.collect(path.join(DATA, 'minute-chart.json'), date, items, { budgetMs: 60 * 1000 })
+      console.log('  分时图采集：+' + minuteChart.added + ' 只（库内共 ' + minuteChart.total + ' 条）' +
+        (minuteChart.failed.length ? '，失败 ' + minuteChart.failed.length + ' 只' : ''))
+    } catch (e) { console.log('  ⚠️ 分时图采集失败（不影响主流程）：' + e.message) }
   }
 
   const meta = {
@@ -403,7 +412,8 @@ async function main () {
     storeDays: store.dates.length,
     storeStocks: Object.keys(store.st).length,
     rolling,
-    minuteLog
+    minuteLog,
+    minuteChart
   }
 
   /* --- 3. 落盘 --- */

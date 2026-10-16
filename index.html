@@ -54,15 +54,16 @@
 
   #err{display:none;background:rgba(240,74,74,.1);border:1px solid rgba(240,74,74,.4);color:var(--up);border-radius:8px;padding:12px;margin:12px 0;font-size:13px}
 
-  /* 滚动验证条 */
-  .rollbar{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 13px;margin:12px 0 0;display:flex;align-items:center;gap:11px;flex-wrap:wrap}
-  .rollbar .rb{display:inline-block;padding:3px 11px;border-radius:12px;font-size:12px;font-weight:700;white-space:nowrap}
-  .rollbar .rb.green{background:rgba(34,197,94,.16);color:#22c55e}
-  .rollbar .rb.watch{background:rgba(250,204,21,.16);color:#facc15}
-  .rollbar .rb.degrade{background:rgba(240,74,74,.16);color:var(--up)}
-  .rollbar .rb.insufficient{background:rgba(143,160,191,.15);color:var(--tx2)}
-  .rollbar .rn{font-size:11.5px;color:var(--tx2);flex:1;min-width:200px}
-  .rollbar .rk{font-size:11px;color:var(--tx2);cursor:help;border-bottom:1px dotted var(--tx2)}
+  /* 滚动验证：只作为一个小徽章挂在 M2 卡片里（不再顶部占整条）
+     ★ 2026-10-16 用户要求：「方向成立」这个提示弱化显示，作为一个标签，显示在 M2 跟随里面就行，
+       没必要显示那么多细节 ⇒ 顶部整条 #rollbar 已删除，多窗口/显著性明细不再展示。 */
+  .rolltag{display:inline-flex;align-items:center;gap:6px;padding:2px 10px;border-radius:12px;
+    font-size:11.5px;font-weight:700;white-space:nowrap;vertical-align:middle}
+  .rolltag.green{background:rgba(34,197,94,.16);color:#22c55e}
+  .rolltag.watch{background:rgba(250,204,21,.16);color:#facc15}
+  .rolltag.degrade{background:rgba(240,74,74,.16);color:var(--up)}
+  .rolltag.insufficient{background:rgba(143,160,191,.15);color:var(--tx2)}
+  .rollnote{font-size:11px;color:var(--tx2);margin-left:7px}
 
   /* 盘中实时 */
   .live{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:12px 0 0}
@@ -118,8 +119,42 @@
   .tag.sk{background:rgba(143,160,191,.15);color:var(--tx2)}
   .empty{background:var(--panel);border:1px dashed var(--line);border-radius:9px;padding:20px;text-align:center;color:var(--tx2);font-size:12.5px}
   .planmsg{background:var(--panel);border:1px dashed var(--line);border-radius:9px;padding:14px;color:var(--tx2);font-size:12.5px;line-height:1.7}
+  /* 今日分时图卡片 */
+  .mcharts{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px}
+  .mchart{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:8px 9px 4px}
+  .mchart .mch{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;margin-bottom:5px;padding:0 2px}
+  .mchart .mch .mcn{font-weight:600}
+  .mchart .mch .mcc{color:var(--tx2);font-size:11px}
+  .mchart .mch .mcl{color:#c084fc;font-size:11px}
+  .mchart .mch .mcd{color:var(--tx2);font-size:11px;margin-left:auto}
+  .mchart svg{display:block}
+  .mchart .mclg{display:flex;gap:12px;font-size:10.5px;color:var(--tx2);padding:2px 2px 4px}
+  .mchart .mclg span{display:inline-flex;align-items:center;gap:4px}
+  .mchart .mclg i{display:inline-block;width:8px;height:8px;border-radius:50%}
   .foot{margin-top:24px;color:var(--tx2);font-size:11px;line-height:1.7}
   .foot b{color:var(--tx)}
+
+  /* ============ 表格手机适配（≤760px）：表格 → 卡片堆叠 ============
+     ★ 2026-10-16 用户要求：今日持仓 / 成交明细 要符合手机屏幕宽度布局。
+     现状 th,td{white-space:nowrap} 在窄屏必然横向撑破（持仓 8 列、成交明细 9 列）。
+     方案：窄屏把每个 <tr> 变成一张独立小卡，每个 <td> 一行「字段名 : 值」。
+     字段名从 <td data-l="…"> 取（桌面端该属性无用，不影响渲染）。
+     ★ 任何 width:100% 的 table 在窄屏都靠这套兜底；不依赖 JS，纯 CSS。 */
+  @media(max-width:760px){
+    table{display:block;border:none;background:transparent;border-radius:0}
+    /* 表头行（JS 统一加了 class="thead"）在窄屏隐藏，字段名改由每格的 data-l 承担 */
+    table tr.thead{display:none}
+    table tr{display:block;background:var(--panel);border:1px solid var(--line);
+      border-radius:9px;padding:4px 2px;margin-bottom:9px}
+    table td{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;
+      border:none;padding:5px 10px;text-align:right;white-space:normal;word-break:break-word;line-height:1.5}
+    table td::before{content:attr(data-l);color:var(--tx2);font-size:11.5px;
+      flex:0 0 auto;text-align:left;font-weight:500;padding-top:1px}
+    /* 没有字段名的整格（data-l="" 或未加）→ 不显示标签，左对齐整行铺满 */
+    table td[data-l=""]::before,table td:not([data-l])::before{display:none}
+    table td[data-l=""]{justify-content:flex-start;text-align:left}
+    table td.l{text-align:right}
+  }
 
   /* ============ 移动端抽屉（≤900px） ============
      PC 端侧边栏是常驻 sticky；手机上那样会变成一个挡在内容前的悬浮块、且页面在它后面滚动。
@@ -200,8 +235,6 @@
       <div class="kpi" id="kpi"></div>
     </div>
 
-    <div class="rollbar" id="rollbar" style="display:none"></div>
-
     <div class="live" id="live" style="display:none"></div>
 
     <!-- 收益曲线 -->
@@ -250,6 +283,7 @@ var dnum = d => String(d==null?'':d).replace(/[^0-9]/g,'')
 var cnDate = d => { var s=dnum(d); return s.length>=8 ? s.slice(0,4)+'-'+s.slice(4,6)+'-'+s.slice(6,8) : String(d==null?'':d) }
 var mmdd = d => { var s=dnum(d); return s.length>=8 ? s.slice(4,6)+'-'+s.slice(6,8) : s }
 var LIVE = null
+var MCHART = null          /* 当日分时序列（data/minute-chart.json），画「今日操作股票」的分时图 */
 
 /* ---------- 数据拉取 ---------- */
 function fetchJSON(){
@@ -267,6 +301,14 @@ function fetchJSON(){
 function loadLive(){
   fetch('./data/intraday.json?_='+Date.now(), {cache:'no-store'}).then(r=> r.ok ? r.json() : null)
     .then(function(j){ LIVE = j; renderLive(); if(DATA) render(DATA) }).catch(function(){ /* 保留上一次 */ })
+}
+/* ★ 当日分时序列（画「今日操作股票」的分时图）。
+   文件由每日收盘任务采集（lib/minute-chart.js），只留最近 8 个交易日。
+   加载失败/文件不存在都不影响主看板（图区自行隐藏）。 */
+function loadMinuteChart(){
+  fetch('./data/minute-chart.json?_='+Date.now(), {cache:'no-store'}).then(r=> r.ok ? r.json() : null)
+    .then(function(j){ MCHART = (j && Array.isArray(j.rows)) ? j : null; if(DATA) renderDetail() })
+    .catch(function(){ /* 静默：没有分时数据时图区不显示 */ })
 }
 
 /* ★ 盘中实时并入：LIVE 快照比正式看板新一个交易日时，顶部数字用实时值并标 ⚡实时。
@@ -380,11 +422,12 @@ function renderDetail(){
   var c = colorOf(s.id)
   var h = '<div class="stitle" style="border-color:'+c+'">'+s.id+' · '+s.name+' 详情<small>'+esc(s.brief)+'</small></div>'
 
-  /* M2 专属：今日跟随谁 + 依据（切换轨迹折叠在卡片内） */
+  /* M2 专属：今日跟随谁 + 依据（切换轨迹折叠在卡片内）
+     ★ 「方向成立」等滚动验证状态已弱化为这个小卡片里的一个徽章（顶部整条已撤）。 */
   if(s.m2){
     h += '<div class="cards" style="display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:12px"><div class="card" style="background:var(--panel)">'
       + '<div class="t">今日跟随</div>'
-      + '<div class="v"><span class="pick">'+s.m2.pickToday.name+'</span></div>'
+      + '<div class="v"><span class="pick">'+s.m2.pickToday.name+'</span>'+rollTagHTML(DATA)+'</div>'
       + '<div class="m">' + s.m2.trace.map(function(x){ return x.name+' 近10日 <span class="'+cls(x.ret)+'">'+(x.ret==null?'—':pct(x.ret))+'</span>' }).join('　·　')
       + '　→ 取最强</div>'
       + '<div class="m" style="margin-top:3px">'+s.m2.ref+'</div>'
@@ -395,13 +438,14 @@ function renderDetail(){
   /* 今日持仓 */
   h += '<div class="stitle" style="border-color:'+c+';font-size:13px">今日持仓'+(s.positions&&s.positions.length?'（'+s.positions.length+' 只）':'')+'</div>'
   if(s.positions && s.positions.length){
-    h += '<table><tr><th class="l">代码</th><th class="l">名称</th><th>板</th><th>股数</th><th>买入价</th><th>现价</th><th>浮动盈亏</th><th class="l">状态</th></tr>'
+    h += '<table><tr class="thead"><th class="l">代码</th><th class="l">名称</th><th>板</th><th>股数</th><th>买入价</th><th>现价</th><th>浮动盈亏</th><th class="l">状态</th></tr>'
       + s.positions.map(function(p){
           var cur = p.curC!=null ? price(p.curC) : '—'
           var pnl = p.curPnlC!=null ? '<span class="'+cls(p.curPnlC)+'">'+signYuan(p.curPnlC)+' 元</span>' : '<span style="color:var(--tx2)">—</span>'
-          return '<tr><td class="l">'+p.code+'</td><td class="l">'+p.name+'</td><td>'+p.lbc+'</td><td>'+p.shares+'</td>'
-            +'<td>'+price(p.buyC)+'</td><td>'+cur+'</td><td>'+pnl+'</td>'
-            +'<td class="l">'+(p.ztNow?'<span class="tag b">🔒 涨停中</span>':'<span class="tag sk">持有中</span>')+'（'+p.buyDate+' 买入）</td></tr>'
+          /* ★ data-l 供窄屏卡片布局当字段名（桌面端不用，不影响渲染） */
+          return '<tr><td class="l" data-l="代码">'+p.code+'</td><td class="l" data-l="名称">'+p.name+'</td><td data-l="板">'+p.lbc+'</td><td data-l="股数">'+p.shares+'</td>'
+            +'<td data-l="买入价">'+price(p.buyC)+'</td><td data-l="现价">'+cur+'</td><td data-l="浮动盈亏">'+pnl+'</td>'
+            +'<td class="l" data-l="状态">'+(p.ztNow?'<span class="tag b">🔒 涨停中</span>':'<span class="tag sk">持有中</span>')+'（'+p.buyDate+' 买入）</td></tr>'
         }).join('') + '</table>'
   } else {
     h += '<div class="empty">当前空仓'+(s.m2&&s.m2.pickToday.pause?'（今日判定空仓）':'')+'</div>'
@@ -414,37 +458,56 @@ function renderDetail(){
   if(LIVE && LIVE.strategies) LIVE.strategies.forEach(function(x){ if(x.id===s.id) lvS = x })
   var buys = (lvS && lvS.todayBuys && lvS.todayBuys.length) ? lvS.todayBuys : (s.todayBuys||[])
   var sells = (lvS && lvS.todaySells && lvS.todaySells.length) ? lvS.todaySells : (s.todaySells||[])
-  var colA = '<table><tr><th class="l">今日操作</th></tr>'
+  var colA = '<table><tr class="thead"><th class="l">今日操作</th></tr>'
   if(buys.length){
-    colA += buys.map(function(b){ return '<tr><td class="l"><span class="tag b">买入</span> '+b.name+'（'+b.code+'）'+b.lbc+' 板 '+b.shares+' 股 @ '+price(b.buyC)+'（开盘成交）</td></tr>' }).join('')
+    colA += buys.map(function(b){ return '<tr><td class="l" data-l=""><span class="tag b">买入</span> '+b.name+'（'+b.code+'）'+b.lbc+' 板 '+b.shares+' 股 @ '+price(b.buyC)+'（开盘成交）</td></tr>' }).join('')
   }
   if(sells.length){
     colA += sells.map(function(t){
       var isPrev = t.preview === true || /^【预演/.test(t.reason || '')
       var head = isPrev ? '<span class="tag" style="background:rgba(217,119,6,.16);color:#e0a45a">⏳ 预演卖出（未成交）</span>' : '<span class="tag s">卖出</span>'
-      return '<tr><td class="l">'+head+' '+t.name+'（'+t.code+'）@ '+price(t.sellC)
+      return '<tr><td class="l" data-l="">'+head+' '+t.name+'（'+t.code+'）@ '+price(t.sellC)
         +' <span class="'+cls(t.pnlC)+'">'+signYuan(t.pnlC)+'（'+pct(t.pnlPct)+'）</span><br><span style="color:var(--tx2);font-size:11px">'+t.reason+'</span></td></tr>'
     }).join('')
   }
-  if(!buys.length && !sells.length) colA += '<tr><td class="l" style="color:var(--tx2)">今日暂无成交</td></tr>'
+  if(!buys.length && !sells.length) colA += '<tr><td class="l" data-l="" style="color:var(--tx2)">今日暂无成交</td></tr>'
   colA += '</table>'
 
   /* 明日买入计划（收盘后判断显示） */
   var closed = !LIVE || LIVE.phase!=='trading'
-  var colB = '<table><tr><th class="l">明日买入计划</th></tr>'
+  var colB = '<table><tr class="thead"><th class="l">明日买入计划</th></tr>'
   if(!closed){
-    colB += '<tr><td class="l" style="color:var(--tx2)">⏳ <b>收盘后判断</b>：计划由 <b>今日收盘</b> 选出、<b>明日 09:30–09:33</b> 开盘价挂单执行。盘中不提前公布，避免误以为已经买了。</td></tr>'
+    colB += '<tr><td class="l" data-l="" style="color:var(--tx2)">⏳ <b>收盘后判断</b>：计划由 <b>今日收盘</b> 选出、<b>明日 09:30–09:33</b> 开盘价挂单执行。盘中不提前公布，避免误以为已经买了。</td></tr>'
   } else if(s.nextCandidates && s.nextCandidates.length){
     colB += s.nextCandidates.map(function(x,i){
-      return '<tr><td class="l">第'+(i+1)+'顺位　'+x.code+' '+x.name+'　'+x.lbc+' 板　成交额 '+((x.amount||0)/1e8).toFixed(2)+' 亿</td></tr>'
+      return '<tr><td class="l" data-l="">第'+(i+1)+'顺位　'+x.code+' '+x.name+'　'+x.lbc+' 板　成交额 '+((x.amount||0)/1e8).toFixed(2)+' 亿</td></tr>'
     }).join('')
-    colB += '<tr><td class="l" style="color:var(--tx2);font-size:11px">明日开盘挂单，一字涨停开盘则弃买</td></tr>'
+    colB += '<tr><td class="l" data-l="" style="color:var(--tx2);font-size:11px">明日开盘挂单，一字涨停开盘则弃买</td></tr>'
   } else {
-    colB += '<tr><td class="l" style="color:var(--tx2)">'+(s.m2&&s.m2.pickToday.pause?'今日判定空仓，明日不开新仓':'无候选')+'</td></tr>'
+    colB += '<tr><td class="l" data-l="" style="color:var(--tx2)">'+(s.m2&&s.m2.pickToday.pause?'今日判定空仓，明日不开新仓':'无候选')+'</td></tr>'
   }
   colB += '</table>'
 
   h += '<div>'+colA+'</div><div>'+colB+'</div></div>'
+
+  /* ★ 今日操作股票 · 当日分时图（用户 2026-10-16 要求）
+     数据源 data/minute-chart.json（每日收盘采集 5 分钟全序列，只留最近 8 个交易日）。
+     要画的票 = 今日买入 ∪ 今日卖出 ∪ 持仓（去重），与本策略有关联的优先。 */
+  var chartCodes = []
+  var seenCode = Object.create(null)
+  ;[buys, sells, (s.positions||[])].forEach(function(arr, ai){
+    ;(arr||[]).forEach(function(x){
+      if(!x || !x.code || seenCode[x.code]) return
+      seenCode[x.code] = 1
+      chartCodes.push({ code:x.code, name:x.name, lbc:x.lbc,
+        tag: ai===0 ? '今日买入' : (ai===1 ? '今日卖出' : '持仓') })
+    })
+  })
+  var chartsHTML = minuteChartsHTML(chartCodes, buys, sells)
+  if(chartsHTML){
+    h += '<div class="stitle" style="border-color:'+c+';font-size:13px">今日操作股票 · 分时</div>'
+    h += chartsHTML
+  }
 
   /* 成交明细 */
   h += '<div class="stitle" style="border-color:'+c+';font-size:13px">成交明细'+(s.live?'（⚡实时）':'')+'</div>'
@@ -457,16 +520,189 @@ function renderDetail(){
   ;(s.positions||[]).forEach(function(p){ evs.push({d:p.buyDate, ty:'买入', code:p.code, name:p.name, lbc:p.lbc, sh:p.shares, p:p.buyC, tag:'b', open:'持仓中'}) })
   evs.sort(function(a,b){ return a.d===b.d ? (a.ty<b.ty?-1:1) : (a.d<b.d?1:-1) })
   h += evs.length
-    ? '<table><tr><th class="l">日期</th><th class="l">操作</th><th class="l">代码</th><th class="l">名称</th><th>板</th><th>价格</th><th>股数</th><th>盈亏</th><th class="l">备注</th></tr>'
+    ? '<table><tr class="thead"><th class="l">日期</th><th class="l">操作</th><th class="l">代码</th><th class="l">名称</th><th>板</th><th>价格</th><th>股数</th><th>盈亏</th><th class="l">备注</th></tr>'
       + evs.map(function(e){
           var pnl = e.tag==='s' ? '<span class="'+cls(e.pnl)+'">'+signYuan(e.pnl)+'（'+pct(e.pp)+'）</span>' : (e.open?'<span class="tag sk">'+e.open+'</span>':'')
-          return '<tr><td class="l">'+e.d+'</td><td class="l"><span class="tag '+e.tag+'">'+e.ty+'</span></td>'
-            +'<td class="l">'+e.code+'</td><td class="l">'+e.name+'</td><td>'+e.lbc+'</td>'
-            +'<td>'+price(e.p)+'</td><td>'+e.sh+'</td><td>'+pnl+'</td><td class="l" style="color:var(--tx2)">'+(e.reason||'')+'</td></tr>'
+          /* ★ data-l 供窄屏卡片布局当字段名 */
+          return '<tr><td class="l" data-l="日期">'+e.d+'</td><td class="l" data-l="操作"><span class="tag '+e.tag+'">'+e.ty+'</span></td>'
+            +'<td class="l" data-l="代码">'+e.code+'</td><td class="l" data-l="名称">'+e.name+'</td><td data-l="板">'+e.lbc+'</td>'
+            +'<td data-l="价格">'+price(e.p)+'</td><td data-l="股数">'+e.sh+'</td><td data-l="盈亏">'+pnl+'</td><td class="l" data-l="备注" style="color:var(--tx2)">'+(e.reason||'')+'</td></tr>'
         }).join('') + '</table>'
     : '<div class="empty">暂无成交 —— 模拟盘 '+DATA.startDate+' 启动，首笔买入在下一交易日开盘执行</div>'
 
   document.getElementById('detail').innerHTML = h
+}
+
+/* ================= 今日分时图（SVG） =================
+ * 数据：MCHART = { rows:[{date,code,name,lbc,prevC,bars:[{t,o,h,l,c,v}]}] }
+ * 规则：
+ *   · 只画「该票最新一天」的序列（最近一个交易日有数据就用它）；
+ *   · y 轴以「昨收」为基准对称，涨红跌绿（A 股口径）；
+ *   · 叠一条均价线（累计成交额/累计成交量）与一条昨收虚线；
+ *   · 09:35 起画（5 分钟粒度），横轴标 09:35 / 11:30 / 14:00 / 15:00 附近刻度；
+ *   · ★ 叠「买卖点」标记：B（买，红实心）/ S（卖，绿实心），价按实际成交价贴到对应 bar 上。
+ */
+function seriesOf(code){
+  if(!MCHART || !MCHART.rows) return null
+  var best = null
+  MCHART.rows.forEach(function(r){
+    if(r.code!==code) return
+    if(!best || String(r.date) > String(best.date)) best = r
+  })
+  if(!best || !best.bars || best.bars.length<2) return null
+  return best
+}
+/* 把「成交时间(09:35 形式的 bar 键)」落到 bars 的下标上。
+ * 规则：取第一个 t >= 成交时间的 bar；成交时间早于首根则归到第 0 根（开盘买）。
+ * 无成交时间（老交易记录）⇒ 用 fallbackIdx（买=0 开盘；卖=末根 收盘）。 */
+function barIdxByTime(bars, hhmm, fallbackIdx){
+  if(hhmm && /^\d{2}:\d{2}$/.test(hhmm)){
+    for(var i=0;i<bars.length;i++){ if(bars[i].t >= hhmm) return i }
+    return bars.length-1
+  }
+  return fallbackIdx
+}
+/* 归一化成交时间到「5 分钟 bar 键」（新浪 scale=5 的 bar 结束时刻）：
+ *   <09:35 → 09:35（开盘段，首根）
+ *   09:35–11:30 → 向上取整到 5 分（如 09:33→09:35、09:36→09:40）
+ *   11:31–13:04 → 13:05（午休，午后首根）
+ *   13:05–15:00 → 向上取整到 5 分
+ *   ≥15:00 → 15:00（收盘）
+ * 说明：bar 键 = 该 5 分钟区间的「结束时刻」（新浪约定）。 */
+function toBarKey(t){
+  if(!t) return null
+  var m = String(t).match(/(\d{1,2}):(\d{2})/)
+  if(!m) return null
+  var hh = +m[1], mi = +m[2]
+  var mins = hh*60 + mi
+  if(mins < 9*60+35) return '09:35'
+  if(mins > 11*60+30 && mins < 13*60+5) return '13:05'
+  if(mins >= 15*60) return '15:00'
+  var up = Math.ceil(mins/5)*5                       /* 向上取整到 5 分 */
+  var uh = Math.floor(up/60), um = up % 60
+  return (uh<10?'0':'')+uh+':'+(um<10?'0':'')+um
+}
+function minuteChartSVG(rec, tag, name, lbc, marks){
+  var W = 320, H = 132, padL = 4, padR = 44, padT = 10, padB = 16
+  var bars = rec.bars
+  var n = bars.length
+  var base = rec.prevC!=null ? rec.prevC : bars[0].o
+  /* 对称区间：取相对昨收的最大绝对偏离 */
+  var dev = 0
+  bars.forEach(function(b){
+    dev = Math.max(dev, Math.abs(b.h-base), Math.abs(b.l-base), Math.abs(b.c-base), Math.abs(b.o-base))
+  })
+  /* ★ 买卖点也要纳入 y 轴范围，避免标记被裁掉 */
+  ;(marks||[]).forEach(function(mk){ if(mk.p!=null) dev = Math.max(dev, Math.abs(mk.p-base)) })
+  if(dev < base*0.001) dev = base*0.005
+  var hi = base + dev*1.08, lo = base - dev*1.08
+  var X = function(i){ return padL + (W-padL-padR)*i/(n-1) }
+  var Y = function(p){ return padT + (H-padT-padB)*(hi-p)/(hi-lo) }
+  var colOf = function(p){ return p>base ? '#f04a4a' : (p<base ? '#2fbf71' : '#8fa0bf') }
+  var last = bars[n-1]
+  var chg = (last.c-base)/base
+
+  var g = ''
+  /* 背景 + 参考线 */
+  g += '<rect x="0" y="0" width="'+W+'" height="'+H+'" fill="#1b2438" rx="7"/>'
+  var yBase = Y(base)
+  g += '<line x1="'+padL+'" y1="'+yBase.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+yBase.toFixed(1)+'" stroke="#8fa0bf" stroke-width="1" stroke-dasharray="4 3" opacity=".7"/>'
+  g += '<text x="'+(W-padR+4)+'" y="'+(yBase+4).toFixed(1)+'" fill="#8fa0bf" font-size="9">昨收 '+base.toFixed(2)+'</text>'
+  /* 涨/跌停（±10%）参考线：只在区间内时画 */
+  ;[[base*1.1,'涨'],[base*0.9,'跌']].forEach(function(pair){
+    if(pair[0]<=hi && pair[0]>=lo){
+      var yy = Y(pair[0])
+      g += '<line x1="'+padL+'" y1="'+yy.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+yy.toFixed(1)+'" stroke="#2a3550" stroke-width="1" stroke-dasharray="2 4"/>'
+    }
+  })
+  /* 均价线（累计额/累计量）—— 用 mid 近似额，仅作趋势参考 */
+  var cumV = 0, cumA = 0, avgPts = []
+  bars.forEach(function(b,i){
+    var v = b.v||0, mid = (b.h+b.l+b.c)/3
+    cumV += v; cumA += mid*v
+    avgPts.push(cumV>0 ? cumA/cumV : b.c)
+  })
+  var apath = avgPts.map(function(p,i){ return (i?'L':'M')+X(i).toFixed(1)+' '+Y(p).toFixed(1) }).join(' ')
+  g += '<path d="'+apath+'" fill="none" stroke="#f0a04a" stroke-width="1" opacity=".85"/>'
+  /* 分时价格线 */
+  var ppath = bars.map(function(b,i){ return (i?'L':'M')+X(i).toFixed(1)+' '+Y(b.c).toFixed(1) }).join(' ')
+  g += '<path d="'+ppath+'" fill="none" stroke="'+colOf(last.c)+'" stroke-width="1.6" stroke-linejoin="round"/>'
+  g += '<circle cx="'+X(n-1).toFixed(1)+'" cy="'+Y(last.c).toFixed(1)+'" r="2.6" fill="'+colOf(last.c)+'"/>'
+  /* ★ 买卖点标记：B（买）/ S（卖）。画在对应 bar 上，价按实际成交价。
+     - 买：蓝色系实心（不与涨红/跌绿混淆，用 #4aa3f0 更醒目）；卖：橙/紫实心。
+     - 标签「B」「S」放在标记上方/下方，避免互相压住。 */
+  ;(marks||[]).forEach(function(mk){
+    if(mk.i==null || mk.p==null) return
+    var mx = X(mk.i), my = Y(mk.p)
+    var isBuy = mk.k === 'B'
+    var mc = isBuy ? '#4aa3f0' : '#f0a04a'
+    /* 引线 + 实心圆点 + 价格小字 */
+    g += '<line x1="'+mx.toFixed(1)+'" y1="'+my.toFixed(1)+'" x2="'+mx.toFixed(1)+'" y2="'+(my + (isBuy?7:-7)).toFixed(1)+'" stroke="'+mc+'" stroke-width="1" opacity=".8"/>'
+    g += '<circle cx="'+mx.toFixed(1)+'" cy="'+my.toFixed(1)+'" r="3.2" fill="'+mc+'" stroke="#0e1420" stroke-width="1"/>'
+    var ly = isBuy ? (my+16) : (my-11)
+    g += '<text x="'+mx.toFixed(1)+'" y="'+ly.toFixed(1)+'" fill="'+mc+'" font-size="9.5" font-weight="700" text-anchor="middle">'+mk.k+'</text>'
+    g += '<text x="'+mx.toFixed(1)+'" y="'+(isBuy?(my+25):(my-20)).toFixed(1)+'" fill="'+mc+'" font-size="8" text-anchor="middle">'+mk.p.toFixed(2)+'</text>'
+  })
+  /* 时间刻度 */
+  ;[['09:35',0],['11:30',Math.round((n-1)*0.5)],['15:00',n-1]].forEach(function(tk){
+    var i = tk[1]; if(i==null||i<0||i>=n) return
+    g += '<text x="'+X(i).toFixed(1)+'" y="'+(H-4)+'" fill="#8fa0bf" font-size="9" text-anchor="'+(i===0?'start':(i===n-1?'end':'middle'))+'">'+tk[0]+'</text>'
+  })
+  /* 右上角：当前价 + 涨跌幅 */
+  var cc = colOf(last.c)
+  g += '<text x="'+(W-padR+4)+'" y="'+(padT+9)+'" fill="'+cc+'" font-size="10.5" font-weight="700">'+last.c.toFixed(2)+'</text>'
+  g += '<text x="'+(W-padR+4)+'" y="'+(padT+21)+'" fill="'+cc+'" font-size="9">'+(chg>0?'+':'')+(chg*100).toFixed(2)+'%</text>'
+
+  /* 标记图例（有买卖点时才显示） */
+  var lg = ''
+  if((marks||[]).length){
+    lg = '<div class="mclg">'
+      + (marks.some(function(m){return m.k==='B'}) ? '<span><i style="background:#4aa3f0"></i>B 买点</span>' : '')
+      + (marks.some(function(m){return m.k==='S'}) ? '<span><i style="background:#f0a04a"></i>S 卖点</span>' : '')
+      + '</div>'
+  }
+  return '<div class="mchart">'
+    + '<div class="mch">'
+    +   '<span class="tag '+(tag==='今日买入'?'b':(tag==='今日卖出'?'s':'sk'))+'">'+tag+'</span>'
+    +   '<span class="mcn">'+esc(name||rec.name||'')+'</span>'
+    +   '<span class="mcc">'+esc(rec.code)+'</span>'
+    +   (lbc!=null?'<span class="mcl">'+lbc+' 板</span>':'')
+    +   '<span class="mcd">'+cnDate(rec.date)+'</span>'
+    + '</div>'
+    + '<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="132" preserveAspectRatio="none">'+g+'</svg>'
+    + lg
+    + '</div>'
+}
+/* 从买卖记录构造该票的标记点：[{k:'B'|'S', p:成交价(元), t:'09:35'}]
+ * ★ 时间来源优先级：显式 time 字段 > 约定（买入=开盘、卖出=14:57 收盘）。
+ *   成交价是「分」，图上是「元」⇒ /100。 */
+function marksOf(code, buys, sells){
+  var out = []
+  ;(buys||[]).forEach(function(b){
+    if(b.code!==code) return
+    out.push({ k:'B', p: b.buyC!=null ? b.buyC/100 : null, t: b.time || toBarKey(b.buyTime || '09:30') })
+  })
+  ;(sells||[]).forEach(function(t){
+    if(t.code!==code) return
+    out.push({ k:'S', p: t.sellC!=null ? t.sellC/100 : null, t: t.time || toBarKey(t.sellTime || '14:57') })
+  })
+  return out
+}
+function minuteChartsHTML(codes, buys, sells){
+  if(!MCHART || !codes || !codes.length) return ''
+  var out = []
+  codes.forEach(function(cc){
+    var rec = seriesOf(cc.code)
+    if(!rec) return
+    /* 把标记落到 bar 下标上（买 fallback=首根，卖 fallback=末根） */
+    var marks = marksOf(cc.code, buys, sells).map(function(mk){
+      var idx = barIdxByTime(rec.bars, mk.t, mk.k==='B' ? 0 : rec.bars.length-1)
+      return { k: mk.k, p: mk.p, i: idx }
+    }).filter(function(mk){ return mk.p!=null && mk.i!=null })
+    out.push(minuteChartSVG(rec, cc.tag, cc.name, cc.lbc, marks))
+  })
+  if(!out.length) return ''
+  return '<div class="mcharts">'+out.join('')+'</div>'
 }
 
 /* ---------- 盘中实时面板（顶部，只显当前选中策略） ---------- */
@@ -510,24 +746,25 @@ function renderLive(){
   box.style.display = 'block'
 }
 
-/* ---------- 滚动验证条 ---------- */
+/* ---------- 滚动验证：弱化为 M2 卡片里的一个小标签 ----------
+ * ★ 2026-10-16 用户要求：「方向成立」弱化显示，作为一个标签挂在 M2 跟随里，不显示那么多细节。
+ *   原实现是顶部整条常驻状态条（含「多窗口 5/10/20 日」「显著性检验需 2831 交易日」长文案）。
+ *   现改为：只在 M2 卡片「今日跟随」那一行右侧显示一个状态徽章 + 一句极简说明。
+ *   status 四档：green 方向成立 / watch 观察中 / degrade 建议降级 / insufficient 样本不足。
+ *   ★ 保留 rolling 数据获取本身（dashboard.json.rolling / LIVE.rolling），只改呈现。 */
 var ROLL_LBL = { green: '🟢 方向成立', watch: '🟡 观察中', degrade: '🔴 建议降级', insufficient: '⚪ 样本不足' }
-function renderRolling(d){
+function rollingOf(d){
   var rr = d && d.rolling
   if(LIVE && LIVE.rolling && d && String(LIVE.bjDate) > String(d.date)) rr = LIVE.rolling
-  var box = document.getElementById('rollbar')
-  if(!rr){ box.style.display='none'; return }
+  return rr || null
+}
+/* 返回一个小徽章（+可选一句说明）；无数据返回空串 */
+function rollTagHTML(d, withNote){
+  var rr = rollingOf(d)
+  if(!rr) return ''
   var st = ROLL_LBL[rr.status] || ('⚪ '+(rr.status||'—'))
-  var h = '<span class="rb '+rr.status+'">'+st+'</span>'
-  h += '<span class="rn">'+rr.note+'</span>'
-  if(rr.direction && rr.direction.length){
-    h += '<span class="rk" title="近 60 交易日内，5/10/20 日窗口各自累计收益；越多为正越稳">多窗口 '
-      + rr.direction.map(function(x){ return x.win+'日 <span class="'+cls(x.ret)+'">'+pct(x.ret)+'</span>' }).join(' · ')
-      + '（'+rr.direction.filter(function(x){return x.ret>0}).length+'/'+rr.direction.length+' 为正）</span>'
-  }
-  h += '<span class="rk" title="每 20 交易日复检一次：把「证明有效」换成「监控何时失效」——日波动 5.29% / 日均超额 0.199% ⇒ 显著性检验需 n≈2831 交易日（11.3 年），打板策略上不可达">滚动验证 · 每20交易日复检 ⓘ</span>'
-  box.innerHTML = h
-  box.style.display = 'flex'
+  return '<span class="rolltag '+rr.status+'" title="滚动验证：每 20 交易日复检一次，监控这套跟随逻辑何时失效">'+st+'</span>'
+    + (withNote && rr.note ? '<span class="rollnote">'+esc(rr.note)+'</span>' : '')
 }
 
 function card(t, v, cl, m){
@@ -540,7 +777,6 @@ function render(d){
   var S = mergedStrategies()
   if(!S.length) return
   if(!stratById(CUR)) CUR = S[0].id        // 默认 M2（results[0] 恒为 M2）
-  renderRolling(d)
   renderSide()
   renderHero()
   renderLive()
@@ -683,6 +919,7 @@ document.getElementById('sideclose').onclick = closeSide
 document.addEventListener('keydown', function(e){ if(e.key === 'Escape' && sideIsOpen()) closeSide() })
 
 loadLive()
+loadMinuteChart()
 setInterval(loadLive, 60000)
 fetchJSON()
 </script>
