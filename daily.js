@@ -358,7 +358,9 @@ async function main () {
 
   /* --- 2. 策略重放（M2 在前，见 lib/sim.js） --- */
   const date = store.dates[store.dates.length - 1]
-  const results = SIM.computeAll(store, cfg).results
+  const computed = SIM.computeAll(store, cfg)
+  const results = computed.results
+  const curves = computed.curves || {}
 
   results.forEach(r => {
     console.log('  [' + r.id + '] ' + date + ' 当日 ' + yuan(r.dayPnlC) + '（' + pct(r.dayRet) + '）累计 ' + pct(r.cumRet) +
@@ -424,6 +426,7 @@ async function main () {
     fs.writeFileSync(path.join(DATA, 'dashboard.json'), JSON.stringify({
       updated: new Date().toISOString(), date,
       startDate: cfg.startDate, initialCash: cfg.initialCash,
+      replayStart: computed.replayStart || undefined,
       rolling: rolling || undefined,
       strategies: results.map(r => ({
         id: r.id, name: r.name,
@@ -440,6 +443,10 @@ async function main () {
         cumPnlC: r.cumPnlC, cumRet: r.cumRet,
         tradeCount: r.tradeCount, winRate: r.winRate, maxDrawdown: r.maxDrawdown,
         daily: r.equityFull,
+        /* ★ 全区间回放曲线（从数据集可回测起点 warmup 起跑，同参数）：
+             模拟账户 startDate 常＝上线日（可能就是数据集最后一天）⇒ daily 只有 1 个点、曲线空白。
+             这里给一条有形状的历史曲线供看板绘制。页面注明「回放」，与真实账户区分。 */
+        curve: curves[r.id] || undefined,
         trades: r.tradesFull,
         positions: r.positions.map(p => ({ code: p.code, name: p.name, lbc: p.lbc, shares: p.shares, buyDate: p.buyDate, buyC: p.buyC, costC: p.costC })),
         nextCandidates: r.nextCandidates.map(c => ({ code: c.code, name: c.name, lbc: c.lbc, amount: c.amount || 0 })),

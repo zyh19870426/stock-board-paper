@@ -84,7 +84,7 @@ function buildMorning (bjDate, hhmm, strategies) {
     L.push('')
   }
   if (m2.todaySells && m2.todaySells.length) {
-    L.push('**卖出（14:57 前确认未封板则挂单）**')
+    L.push('**待卖出（14:57 前确认未封板才挂单，未到 14:57 一律不卖）**')
     m2.todaySells.forEach(t => L.push('- ' + t.code + ' ' + t.name + '　' + t.reason))
     L.push('')
   }
@@ -162,15 +162,36 @@ async function main () {
     synth.st[code] = { n: raw.n, d0: raw.d0, k: raw.k + ';' + seg }
   }
 
-  /* --- 4. 同一套引擎重放到今天（纯内存预览，绝不写数据集） --- */
+  /* --- 4. 同一套引擎重放到今天（纯内存预览，绝不写数据集） ---
+   * ★ 2026-10-16：盘中阶段的「卖出/买入」是【预演】而非已成交 —— 引擎把「现价」当「今收」
+   *   跑出的投影。若不标注，用户会误以为已经卖出（尤其盘中现价低于涨停价时，
+   *   断板判定立即成立，看起来像"开盘就卖了"）。故此处：
+   *   ① 盘中（trading）给 reason 加【预演】前缀 + 明细里带现价/涨停价对比
+   *   ② 加 preview:true 字段供前端改用预演样式
+   *   ③ 收盘后（closed）保持原文案（此时"预演"≡真实结果，无需前缀） */
+  const isTrading = phase === 'trading'
+  const previewReason = (t) => {
+    if (!isTrading) return t.reason
+    /* 断板类：补上「现价 vs 涨停价」的对比，让用户一眼看出是按哪个价判的
+     * ★ 单位：quote.js 的 price/prevClose 都是「元」，直接 toFixed(2)，不要再 /100 */
+    if (t.tag === 'break' || /断板/.test(t.reason || '')) {
+      const qt = q[t.code]
+      if (qt && qt.price > 0 && qt.prevClose > 0) {
+        const cur = qt.price.toFixed(2)
+        const zt = (qt.prevClose * (1 + (/^(30|68)/.test(t.code) ? 0.2 : 0.1))).toFixed(2)
+        return '【预演·未成交】现价 ' + cur + ' < 涨停 ' + zt + ' ⇒ 若 14:57 仍如此则在尾盘集合竞价卖出（成交价＝当日收盘价）'
+      }
+    }
+    return '【预演·未成交】' + (t.reason || '')
+  }
   const sim = SIM.computeAll(synth, cfg)
   const strategies = sim.results.map(r => ({
     id: r.id, name: r.name,
     pickToday: r.m2 ? r.m2.pickToday.name : undefined,
     trace: r.m2 ? r.m2.trace : undefined,
     totalC: r.totalC, dayPnlC: r.dayPnlC, dayRet: r.dayRet, cumRet: r.cumRet,
-    todayBuys: r.todayBuys.map(p => ({ code: p.code, name: p.name, lbc: p.lbc, shares: p.shares, buyC: p.buyC })),
-    todaySells: r.todayTrades.map(t => ({ code: t.code, name: t.name, sellC: t.sellC, pnlC: t.pnlC, pnlPct: t.pnlPct, reason: t.reason })),
+    todayBuys: r.todayBuys.map(p => ({ code: p.code, name: p.name, lbc: p.lbc, shares: p.shares, buyC: p.buyC, preview: isTrading })),
+    todaySells: r.todayTrades.map(t => ({ code: t.code, name: t.name, sellC: t.sellC, pnlC: t.pnlC, pnlPct: t.pnlPct, reason: previewReason(t), preview: isTrading })),
     skippedToday: r.skippedToday.map(s => ({ code: s.code, name: s.name, reason: s.reason })),
     positions: r.positions.map(p => {
       const qt = q[p.code]
@@ -197,7 +218,8 @@ async function main () {
   writeOut({
     updated: new Date().toISOString(),
     bjDate: BJ.date, bjTime: hhmm, phase,
-    note: phase === 'trading' ? '盘中预演：今开已定 ⇒ 开盘买入为真实成交价；现价随行情跳动，以收盘跑（daily.js）为准'
+    note: phase === 'trading'
+      ? '盘中预演（不是真实成交）：今开已定 ⇒ 开盘买入为真实成交价；现价随行情跳动，「卖出」是按【当前现价】预先推算出来的结果，未到 14:57 一律不卖，以收盘跑（daily.js）为准'
       : '已收盘预演快照，正式账户以收盘跑为准',
     rolling: rolling || undefined,
     strategies
