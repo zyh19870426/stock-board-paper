@@ -110,7 +110,12 @@
     <div class="h1"><span class="led"></span><h1>S3 定期体检 · 正常</h1>
       <span class="dt">数据截至 2026-10-16</span></div>
     <div class="say">所有检验项均在方案基线内，<b>不需要任何动作</b>。S3 的收益由右尾驱动，正常波动不应触发调参。</div>
-    <div class="meta">连续第 2 次「正常」 ｜ 体检时间 2026/10/17 17:57:29 ｜ 数据 2020-03-11 → 2026-10-16（1600 个交易日）</div>
+    <div class="meta">连续第 2 次「正常」 ｜ 体检时间 2026/10/17 18:07:21 ｜ 数据 2020-03-11 → 2026-10-16（1600 个交易日）</div>
+  </div>
+
+  <div class="card" id="cloudCard">
+    <h2>云端轻量体检 <span class="sub" id="cloudSub">读取中…</span></h2>
+    <div id="cloudBody"><div style="color:var(--tx3);font-size:12px">正在读取 data/health-cloud.json …</div></div>
   </div>
 
   <div class="kpis">
@@ -224,8 +229,48 @@ node hist-fetch.js &amp;&amp; node hist-build.js &amp;&amp; node s3-health.js &a
 
   <div class="foot" style="margin-top:18px">
     口径说明：回放 = 用当前线上参数在本地全历史上重算（含佣金/印花税/过户费、T+1 开盘买入、断板尾盘卖出）；实绩 = 线上模拟账户真实净值点。历史回放不代表未来收益。<br>
-    生成时间 2026/10/17 17:57:40 ｜ 引擎 s3-health.js
+    生成时间 2026/10/17 18:58:43 ｜ 引擎 s3-health.js
   </div>
 </div>
+
+<script>
+/* ★ 云端轻量体检块（2026-10-17 新增）：
+   本页其余部分是「本地全历史体检」的静态快照，只在电脑上跑 s3-health.js 时更新。
+   而这一段在浏览器打开时实时拉取 data/health-cloud.json —— 它由 GitHub Actions
+   每个交易日收盘后自动生成（paper/cloud-health.js），所以即使本机没开机，
+   这里也能看到「今天云端体检有没有亮灯」。 */
+(function(){
+  var box = document.getElementById('cloudBody')
+  var sub = document.getElementById('cloudSub')
+  if(!box) return
+  var COL = { green:'#3ddc97', watch:'#f0a04a', red:'#f04a4a' }
+  var TXT = { green:'正常', watch:'观察', red:'异常' }
+  var ICO = { red:'🔴', watch:'🟡', ok:'✅', na:'ℹ️' }
+  fetch('./data/health-cloud.json?_=' + Date.now(), { cache:'no-store' })
+    .then(function(r){ if(!r.ok) throw new Error('HTTP ' + r.status); return r.json() })
+    .then(function(h){
+      var col = COL[h.status] || '#8fa0bf'
+      sub.innerHTML = '<span style="color:' + col + ';font-weight:600">' + (TXT[h.status] || h.status) + '</span>'
+        + ' · 数据 ' + h.date + ' · 体检时间 ' + new Date(h.at).toLocaleString('zh-CN', { hour12: false })
+        + ' · 红 ' + h.counts.red + ' / 黄 ' + h.counts.watch
+      var rows = (h.checks || []).map(function(c){
+        var cc = COL[c.level] || '#8fa0bf'
+        return '<tr><td class="nm">' + (ICO[c.level] || '·') + ' ' + c.name + '</td>'
+          + '<td style="color:' + cc + '">' + c.actual + '</td>'
+          + '<td style="color:var(--tx2)">' + c.standard + '</td></tr>'
+      }).join('')
+      box.innerHTML = '<table><tr class="thead"><th>检验项</th><th>实测（云端）</th><th>标准</th></tr>' + rows + '</table>'
+        + '<div style="color:var(--tx2);font-size:11.5px;margin-top:8px">' + (h.note || '') + '</div>'
+        + (h.status !== 'green'
+          ? '<div style="margin-top:9px;padding:8px 10px;border-radius:8px;background:rgba(240,160,74,.12);border:1px solid rgba(240,160,74,.35);color:#f0a04a;font-size:12px">⚠️ 云端体检有异常项。是否现在做深度排查？本机运行：s3-health.js（全历史 6 年）→ hist-oos-check.js → hist-gate-grid.js → hist-ladder-capture.js。</div>'
+          : '<div style="color:var(--tx3);font-size:11.5px;margin-top:6px">正常时不做任何动作 —— 频繁调参只会砍掉右尾。</div>')
+    })
+    .catch(function(e){
+      sub.textContent = '读数失败'
+      box.innerHTML = '<div style="color:var(--tx2);font-size:12px">云端体检数据暂不可用（' + e.message + '）。'
+        + '请确认 daily.yml 已包含「S3 云端轻量体检」步骤，且最近一次 Actions 跑过。</div>'
+    })
+})()
+</script>
 </body>
 </html>

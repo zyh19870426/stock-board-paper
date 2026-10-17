@@ -31,6 +31,16 @@ jobs:
           SENDKEY: ${{ secrets.SENDKEY }}
           WECOM_WEBHOOK: ${{ secrets.WECOM_WEBHOOK }}
 
+      # 云端轻量体检：不依赖本地 154MB 全历史数据集，只用滚动 store 算
+      # 数据新鲜度 / 配置基线 / 近20·60日绩效 / 连板率 / 回撤；异常时主动推送并提示排查。
+      # 全历史风格分档等深度项仍在本地 s3-health.js 做。
+      - name: S3 云端轻量体检
+        run: node cloud-health.js
+        env:
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+          SENDKEY: ${{ secrets.SENDKEY }}
+          WECOM_WEBHOOK: ${{ secrets.WECOM_WEBHOOK }}
+
       - name: 提交当日数据与报告
         run: |
           git config user.name  "paper-bot"

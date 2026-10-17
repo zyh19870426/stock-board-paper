@@ -1,0 +1,148 @@
+{
+  "at": "2026-10-17T10:58:50.676Z",
+  "date": "2026-10-16",
+  "mode": "cloud-lite",
+  "status": "green",
+  "statusText": "正常 · 无需动作",
+  "counts": {
+    "red": 0,
+    "watch": 0,
+    "ok": 6,
+    "na": 1
+  },
+  "data": {
+    "lastDate": "2026-10-16",
+    "firstDate": "2025-11-13",
+    "lagWorkdays": 1,
+    "tradingDays": 223,
+    "usableDays": 178,
+    "stockCount": 1121,
+    "warmup": 45,
+    "ok": true
+  },
+  "config": {
+    "match": true,
+    "diff": [],
+    "params": {
+      "slots": 2,
+      "minLbc": 0,
+      "maxLbc": 2,
+      "stopLossPct": 20,
+      "trailPct": 25,
+      "exitMode": "break",
+      "maxHoldDays": 10,
+      "sortBy": "amtRatio",
+      "minAmtRatio": 1.5,
+      "allocMode": "dynamic",
+      "refillOnSkip": false,
+      "skipLimitOpen": true,
+      "trailIntraday": true,
+      "topOnly": false,
+      "boardFilter": "main",
+      "maxGem": 1,
+      "delistExit": true,
+      "gateYz": {
+        "q": 0.8,
+        "win": 250
+      },
+      "ddStop": {
+        "ddPct": 0.35,
+        "pauseDays": 60
+      }
+    }
+  },
+  "perf": {
+    "full": {
+      "n": 153,
+      "mean": 0.02761408262722471,
+      "t": 3.0493913520745513
+    },
+    "m20": {
+      "n": 14,
+      "mean": 0.01859849715170681,
+      "t": 0.6218382068125201,
+      "activeDays": 10,
+      "from": "2026-09-11",
+      "to": "2026-10-16"
+    },
+    "m60": {
+      "n": 49,
+      "mean": 0.025163308050830575,
+      "t": 1.2988159120045055,
+      "chainRate": 0.30612244897959184,
+      "activeDays": 30,
+      "from": "2026-07-17",
+      "to": "2026-10-16"
+    },
+    "ddNow": 0.18305949339891459,
+    "trades": 153
+  },
+  "risk": {
+    "gatedDays": 13,
+    "gateToday": false,
+    "ddPauseLeft": 0,
+    "ddTriggers": 0,
+    "ddBlockDays": 0,
+    "activeDays60": 30,
+    "windowDays60": 60
+  },
+  "checks": [
+    {
+      "level": "ok",
+      "id": "dataLag",
+      "name": "云端数据新鲜度",
+      "actual": "落后 1 个工作日（至 2026-10-16）",
+      "standard": "≤ 3 个工作日",
+      "hint": ""
+    },
+    {
+      "level": "ok",
+      "id": "config",
+      "name": "配置 vs 方案基线",
+      "actual": "完全一致",
+      "standard": "与改版方案定稿一致",
+      "hint": ""
+    },
+    {
+      "level": "ok",
+      "id": "m20",
+      "name": "近 20 日单笔均值",
+      "actual": "1.86%（14 笔 / 10 个开仓日）",
+      "standard": "≥ 0",
+      "hint": ""
+    },
+    {
+      "level": "ok",
+      "id": "m60",
+      "name": "近 60 日单笔均值",
+      "actual": "2.52%（t=1.30，49 笔）",
+      "standard": "t > -2 且 ≥ 全区间 3% 的一半",
+      "hint": ""
+    },
+    {
+      "level": "ok",
+      "id": "chain60",
+      "name": "近 60 日连板率（右尾）",
+      "actual": "30.61%（49 笔中 15 笔再封板）",
+      "standard": "≥ 9%",
+      "hint": ""
+    },
+    {
+      "level": "ok",
+      "id": "dd",
+      "name": "当前回撤（自有数据峰值起算）",
+      "actual": "18.31%",
+      "standard": "< 25%（35% 触发熔断）",
+      "hint": ""
+    },
+    {
+      "level": "na",
+      "id": "risk",
+      "name": "风控状态（参考）",
+      "actual": "近 60 日开仓 30/60 天",
+      "standard": "—",
+      "hint": "停手是设计内行为，不算异常；但会拉低短期笔数"
+    }
+  ],
+  "note": "云端轻量体检：只用滚动 store（约 223 个交易日，不复权），覆盖数据新鲜度/配置/近 20·60 日绩效/连板率/回撤。全历史风格分档、条件期望、参数邻域请在本机跑 s3-health.js。"
+}
