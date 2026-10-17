@@ -3,7 +3,11 @@
   "_字段": {
     "startDate": "模拟起点（这一天的收盘用来选股，次日开盘为第一笔买入）",
     "initialCash": "每套策略的初始本金（元）",
-    "params": "完整透传给 lib/strategy.js 的 runBacktest；离场规则固定 exitMode='break'（断板即出），封板强度过滤已下线"
+    "params": "完整透传给 lib/strategy.js 的 runBacktest；离场规则固定 exitMode='break'（断板即出），封板强度过滤已下线",
+    "sortBy": "选股排序：lbc=连板优先（旧） | amtRatio=量能比降序（T 日成交额/前5日均额）",
+    "minAmtRatio": "量能比下限（null=不过滤）",
+    "gateYz": "情绪闸门：昨日涨停股『今日再封率』> 近 win 日 q 分位 ⇒ 当日收盘不选股、次日不买。T 日收盘可得，无未来函数",
+    "ddStop": "账户回撤熔断：净值自历史最高回撤 ≥ ddPct ⇒ 停手 pauseDays 个交易日（不开新仓，持仓照常按规则卖出）"
   },
   "startDate": "2026-10-14",
   "initialCash": 100000,
@@ -50,22 +54,26 @@
     },
     {
       "id": "S3",
-      "name": "配置 1",
+      "name": "策略3 · 首板优化版",
       "params": {
-        "slots": 1,
+        "slots": 2,
         "minLbc": 0,
         "maxLbc": 2,
         "stopLossPct": 20,
         "trailPct": 20,
         "exitMode": "break",
         "maxHoldDays": 10,
-        "sortBy": "lbc",
+        "sortBy": "amtRatio",
+        "minAmtRatio": 1.5,
         "allocMode": "dynamic",
         "refillOnSkip": false,
         "skipLimitOpen": true,
         "trailIntraday": true,
         "topOnly": false,
-        "boardFilter": "main"
+        "boardFilter": "main",
+        "delistExit": true,
+        "gateYz": { "q": 0.7, "win": 250 },
+        "ddStop": { "ddPct": 0.35, "pauseDays": 60 }
       }
     },
     {

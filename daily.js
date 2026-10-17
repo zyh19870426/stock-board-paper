@@ -92,6 +92,18 @@ async function notify (title, content) {
 /* 单套策略重放已迁至 lib/sim.js（daily 与 intraday 共用单一真源；M2 也在这里） */
 
 /* ---------------- 日报 ---------------- */
+/* 看板副标题：把 config 里实际生效的规则如实写出来（新增字段缺省不影响旧策略文案） */
+function briefOf (p) {
+  if (!p || p.slots == null) return ''
+  const sortTxt = p.sortBy === 'amtRatio'
+    ? ' · 量能比' + (p.minAmtRatio != null ? '≥' + p.minAmtRatio : '') + '降序'
+    : (p.sortBy === 'amount' ? ' · 成交额降序' : '')
+  const gateTxt = p.gateYz ? ' · 再封率' + Math.round((p.gateYz.q == null ? 0.7 : p.gateYz.q) * 100) + '分位闸门' : ''
+  const ddTxt = p.ddStop ? ' · 回撤' + Math.round(p.ddStop.ddPct * 100) + '%停' + p.ddStop.pauseDays + '日' : ''
+  return p.slots + ' 份 · 连板 ' + p.minLbc + '<N<' + p.maxLbc + sortTxt +
+    ' · 止损 ' + p.stopLossPct + '% · 回撤线 ' + p.trailPct + '% · 断板即出（T+1：次日起 14:57 判定 / 集合竞价成交）' + gateTxt + ddTxt
+}
+
 function buildReport (date, results, meta) {
   const L = []
   L.push('# 打板模拟跟进 · ' + date)
@@ -440,10 +452,7 @@ async function main () {
       rolling: rolling || undefined,
       strategies: results.map(r => ({
         id: r.id, name: r.name,
-        brief: r.m2 ? SIM.M2_BRIEF
-          : (r.params.slots != null ? r.params.slots + ' 份 · ' : '')
-          + '连板 ' + r.params.minLbc + '<N<' + r.params.maxLbc
-          + ' · 止损 ' + r.params.stopLossPct + '% · 回撤 ' + r.params.trailPct + '% · 断板即出（T+1：次日起 14:57 判定 / 集合竞价成交）',
+        brief: r.m2 ? SIM.M2_BRIEF : briefOf(r.params),
         slots: r.params.slots,
         lbcRange: r.params.slots != null ? (r.params.minLbc + '<N<' + r.params.maxLbc) : '动态（跟随切换）',
         m2: r.m2 || undefined,
