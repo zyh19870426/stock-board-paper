@@ -100,7 +100,8 @@ function briefOf (p) {
     : (p.sortBy === 'amount' ? ' · 成交额降序' : '')
   const gateTxt = p.gateYz ? ' · 再封率' + Math.round((p.gateYz.q == null ? 0.7 : p.gateYz.q) * 100) + '分位闸门' : ''
   const ddTxt = p.ddStop ? ' · 回撤' + Math.round(p.ddStop.ddPct * 100) + '%停' + p.ddStop.pauseDays + '日' : ''
-  return p.slots + ' 份 · 连板 ' + p.minLbc + '<N<' + p.maxLbc + sortTxt +
+  const gemTxt = p.maxGem != null ? ' · 创业板最多' + p.maxGem + '只' : ''
+  return p.slots + ' 份 · 连板 ' + p.minLbc + '<N<' + p.maxLbc + sortTxt + gemTxt +
     ' · 止损 ' + p.stopLossPct + '% · 回撤线 ' + p.trailPct + '% · 断板即出（T+1：次日起 14:57 判定 / 集合竞价成交）' + gateTxt + ddTxt
 }
 

@@ -72,6 +72,7 @@
         "trailIntraday": true,
         "topOnly": false,
         "boardFilter": "main",
+        "maxGem": 1,
         "delistExit": true,
         "gateYz": { "q": 0.8, "win": 250 },
         "ddStop": { "ddPct": 0.35, "pauseDays": 60 }
