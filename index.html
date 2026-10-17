@@ -620,6 +620,15 @@ function renderDetail(){
         }).join('') + '</table>'
     : '<div class="empty">暂无成交 —— 模拟盘 '+DATA.startDate+' 启动，首笔买入在下一交易日开盘执行</div>'
 
+  /* ★ 成交明细 · 平铺分时卡片：与「今日操作股票」同一组件、直接展示，不需要点击。
+     只有最近 20 个交易日内回填到分钟数据的成交才画；更早的靠「时点」列表达。 */
+  var tch = tradeChartsHTML(evs)
+  if(tch){
+    h += '<div class="stitle" style="border-color:'+c+';font-size:13px">成交明细 · 分时（B 买点 / S 卖点）</div>'
+    h += tch
+    h += '<div style="color:var(--tx2);font-size:11px;margin:8px 2px 10px">分时库滚动保留最近 20 个交易日的成交；更早的成交看上表「时点」列的位置条。</div>'
+  }
+
   document.getElementById('detail').innerHTML = h
 }
 
@@ -953,6 +962,54 @@ function toggleMinuteRow(tr){
   row.innerHTML = '<td colspan="6">' + inner + '</td>'
   tr.parentNode.insertBefore(row, tr.nextSibling)
   tr.classList.add('open')
+}
+
+/* ★ 成交明细 · 平铺分时卡片（2026-10-17 用户要求「跟今日操作股票的一样，布局要合理」）：
+ *   不再依赖「点行展开」这种隐蔽交互——凡有分钟数据的成交，直接在成交明细表下方平铺卡片：
+ *     · 跨日交易 ⇒ 买入日一张（B 点）+ 卖出日一张（S 点）；
+ *     · 同日买卖 ⇒ 合并一张图标双点；持仓中 ⇒ 只画买入日。
+ *   组件与「今日操作股票」完全相同（minuteChartSVG），尺寸也一致（网格自适应）。 */
+function tradeChartsHTML(evs){
+  if((!MCHART || !MCHART.rows) && (!MTRADE || !MTRADE.rows)) return ''
+  var seen = Object.create(null), out = []
+  ;(evs||[]).forEach(function(e){
+    if(!e || !e.code || !e.bd) return
+    var n0 = out.length
+    if(e.sd && e.sd === e.bd){
+      /* 同日买卖：一张图标 B/S 双点 */
+      var k0 = e.code+'|'+e.bd+'|BS'
+      if(!seen[k0]){
+        seen[k0] = 1
+        var r0 = seriesOf(e.code, e.bd)
+        if(r0){
+          var mk = []
+          if(isFinite(e.bp)) mk.push({ k:'B', p:e.bp/100, t:'09:30' })
+          if(isFinite(e.sp)) mk.push({ k:'S', p:e.sp/100, t:e.tm || '14:57' })
+          if(mk.length) out.push(minuteChartSVG(r0, '当日买卖', e.name, e.lbc, mk))
+        }
+      }
+    } else {
+      /* 买入日一张 */
+      var kb = e.code+'|'+e.bd+'|B'
+      if(!seen[kb]){
+        seen[kb] = 1
+        var rb = seriesOf(e.code, e.bd)
+        if(rb && isFinite(e.bp)) out.push(minuteChartSVG(rb, '买入', e.name, e.lbc, [{ k:'B', p:e.bp/100, t:'09:30' }]))
+      }
+      /* 卖出日一张 */
+      if(e.sd){
+        var ks = e.code+'|'+e.sd+'|S'
+        if(!seen[ks]){
+          seen[ks] = 1
+          var rs = seriesOf(e.code, e.sd)
+          if(rs && isFinite(e.sp)) out.push(minuteChartSVG(rs, '卖出', e.name, e.lbc, [{ k:'S', p:e.sp/100, t:e.tm || '14:57' }]))
+        }
+      }
+    }
+    if(out.length > n0){ e._charted = 1 }
+  })
+  if(!out.length) return ''
+  return '<div class="mcharts">'+out.join('')+'</div>'
 }
 
 /* ---------- 盘中实时面板（顶部，只显当前选中策略） ---------- */
