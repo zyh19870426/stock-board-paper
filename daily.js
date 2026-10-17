@@ -454,6 +454,7 @@ async function main () {
         id: r.id, name: r.name,
         brief: r.m2 ? SIM.M2_BRIEF : briefOf(r.params),
         slots: r.params.slots,
+        risk: r.risk || undefined,        // ★ 风控状态 + 止损/回撤线（人为跟随用）
         lbcRange: r.params.slots != null ? (r.params.minLbc + '<N<' + r.params.maxLbc) : '动态（跟随切换）',
         m2: r.m2 || undefined,
         date: r.date,

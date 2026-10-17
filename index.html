@@ -435,16 +435,46 @@ function renderDetail(){
       + '</div></div>'
   }
 
+  /* ★ 风控状态（人为跟随专用）：情绪闸门 / 回撤熔断 / 止损线 / 每份金额
+     数据来自 dashboard.json 的 risk 字段，由 lib/sim.js 每套策略统一输出。 */
+  if(s.risk){
+    var rk = s.risk
+    var perSlot = Math.round(s.totalC / (rk.slots || 1) / 100)
+    var gateHTML = rk.gatedDays
+      ? (rk.gateToday
+          ? '<span class="tag sk">🚫 今日过热 → 明日不开新仓</span>'
+          : '<span class="tag b">✅ 今日正常，可开新仓</span>')
+        + '<span style="color:var(--tx2);font-size:11px">　自上线以来累计拦截 ' + rk.gatedDays + ' 个交易日</span>'
+      : '<span style="color:var(--tx2);font-size:11px">本策略未启用情绪闸门</span>'
+    var ddHTML = (rk.ddTriggerCount || rk.ddPauseToday)
+      ? (rk.ddPauseToday
+          ? '<span class="tag sk">⏸ 回撤熔断中：还剩 ' + rk.ddPauseLeft + ' 个交易日不开新仓</span>'
+          : '<span class="tag b">✅ 未停手</span>')
+        + '<span style="color:var(--tx2);font-size:11px">　历史触发 ' + rk.ddTriggerCount + ' 次</span>'
+      : '<span class="tag b">✅ 未停手</span><span style="color:var(--tx2);font-size:11px">　本策略未启用回撤熔断</span>'
+    h += '<div class="cards" style="display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:12px"><div class="card" style="background:var(--panel)">'
+      + '<div class="t">风控状态 · 人为跟随</div>'
+      + '<div class="m">' + gateHTML + '</div>'
+      + '<div class="m" style="margin-top:3px">' + ddHTML + '</div>'
+      + '<div class="m" style="margin-top:3px">每份约 <b>' + perSlot.toLocaleString() + ' 元</b>（总资产 ÷ ' + rk.slots + ' 份）'
+        + '　·　止损 ' + rk.stopLossPct + '%（买入价 ×' + (1 - rk.stopLossPct / 100).toFixed(2) + '）'
+        + '　·　移动回撤线 ' + rk.trailPct + '%　·　最长持有 ' + rk.maxHoldDays + ' 个交易日</div>'
+      + '</div></div>'
+  }
+
   /* 今日持仓 */
   h += '<div class="stitle" style="border-color:'+c+';font-size:13px">今日持仓'+(s.positions&&s.positions.length?'（'+s.positions.length+' 只）':'')+'</div>'
   if(s.positions && s.positions.length){
-    h += '<table><tr class="thead"><th class="l">代码</th><th class="l">名称</th><th>板</th><th>股数</th><th>买入价</th><th>现价</th><th>浮动盈亏</th><th class="l">状态</th></tr>'
+    h += '<table><tr class="thead"><th class="l">代码</th><th class="l">名称</th><th>板</th><th>股数</th><th>买入价</th><th>现价</th><th>止损价</th><th>浮动盈亏</th><th class="l">状态</th></tr>'
       + s.positions.map(function(p){
+          /* 止损价 = 买入价 ×（1 − 止损%）；人为跟随时跌破即走 */
+          var slPct = (s.risk && s.risk.stopLossPct != null) ? s.risk.stopLossPct : 20
+          var slC = price(Math.round(p.buyC * (1 - slPct / 100)))
           var cur = p.curC!=null ? price(p.curC) : '—'
           var pnl = p.curPnlC!=null ? '<span class="'+cls(p.curPnlC)+'">'+signYuan(p.curPnlC)+' 元</span>' : '<span style="color:var(--tx2)">—</span>'
           /* ★ data-l 供窄屏卡片布局当字段名（桌面端不用，不影响渲染） */
           return '<tr><td class="l" data-l="代码">'+p.code+'</td><td class="l" data-l="名称">'+p.name+'</td><td data-l="板">'+p.lbc+'</td><td data-l="股数">'+p.shares+'</td>'
-            +'<td data-l="买入价">'+price(p.buyC)+'</td><td data-l="现价">'+cur+'</td><td data-l="浮动盈亏">'+pnl+'</td>'
+            +'<td data-l="买入价">'+price(p.buyC)+'</td><td data-l="现价">'+cur+'</td><td data-l="止损价" style="color:var(--tx2)">'+slC+'</td><td data-l="浮动盈亏">'+pnl+'</td>'
             +'<td class="l" data-l="状态">'+(p.ztNow?'<span class="tag b">🔒 涨停中</span>':'<span class="tag sk">持有中</span>')+'（'+p.buyDate+' 买入）</td></tr>'
         }).join('') + '</table>'
   } else {
@@ -482,7 +512,9 @@ function renderDetail(){
     colB += s.nextCandidates.map(function(x,i){
       return '<tr><td class="l" data-l="">第'+(i+1)+'顺位　'+x.code+' '+x.name+'　'+x.lbc+' 板　成交额 '+((x.amount||0)/1e8).toFixed(2)+' 亿</td></tr>'
     }).join('')
-    colB += '<tr><td class="l" data-l="" style="color:var(--tx2);font-size:11px">明日开盘挂单，一字涨停开盘则弃买</td></tr>'
+    colB += '<tr><td class="l" data-l="" style="color:var(--tx2);font-size:11px">明日开盘挂单，一字涨停开盘则弃买'
+      + (s.risk ? '　·　每份约 ' + Math.round(s.totalC / (s.risk.slots || 1) / 100).toLocaleString() + ' 元（总资产 ÷ ' + s.risk.slots + ' 份）' : '')
+      + '</td></tr>'
   } else {
     colB += '<tr><td class="l" data-l="" style="color:var(--tx2)">'+(s.m2&&s.m2.pickToday.pause?'今日判定空仓，明日不开新仓':'无候选')+'</td></tr>'
   }
