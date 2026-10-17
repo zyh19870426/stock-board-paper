@@ -7,7 +7,10 @@
     "sortBy": "选股排序：lbc=连板优先（旧） | amtRatio=量能比降序（T 日成交额/前5日均额）",
     "minAmtRatio": "量能比下限（null=不过滤）",
     "gateYz": "情绪闸门：昨日涨停股『今日再封率』> 近 win 日 q 分位 ⇒ 当日收盘不选股、次日不买。T 日收盘可得，无未来函数",
-    "ddStop": "账户回撤熔断：净值自历史最高回撤 ≥ ddPct ⇒ 停手 pauseDays 个交易日（不开新仓，持仓照常按规则卖出）"
+    "ddStop": "账户回撤熔断：净值自历史最高回撤 ≥ ddPct ⇒ 停手 pauseDays 个交易日（不开新仓，持仓照常按规则卖出）",
+    "maxGem": "创业板（300/301）名额上限：按排序顺序当日最多持有几只创业板票（null=不限）",
+    "delistExit": "退市即出：持仓股若次日退市/摘牌，按最后可得价强制清仓（避免死仓占用名额）",
+    "mainStrategy": "主策略 id。看板默认选中它、置顶并标『主策略』；其余策略（含 M2）标 isRef 作对照，不参与人工跟随"
   },
   "startDate": "2026-10-14",
   "initialCash": 100000,
@@ -77,26 +80,10 @@
         "gateYz": { "q": 0.8, "win": 250 },
         "ddStop": { "ddPct": 0.35, "pauseDays": 60 }
       }
-    },
-    {
-      "id": "S4",
-      "name": "配置 5",
-      "params": {
-        "slots": 3,
-        "minLbc": 2,
-        "maxLbc": 4,
-        "stopLossPct": 20,
-        "trailPct": 20,
-        "exitMode": "break",
-        "maxHoldDays": 10,
-        "sortBy": "lbc",
-        "allocMode": "dynamic",
-        "refillOnSkip": false,
-        "skipLimitOpen": true,
-        "trailIntraday": true,
-        "topOnly": false,
-        "boardFilter": "main"
-      }
     }
-  ]
+  ],
+  "_历史": {
+    "S4": "2026-10-17 下线。原『配置 5』＝3板3份（slots:3, minLbc:2, maxLbc:4, trailPct:20），与 S1（3板2份）同质且全区间负期望，保留只会挤占对照位。需要时把上面 S1 的 slots 改成 3 即可复现。",
+    "主策略": "S3 · 首板优化版（mainStrategy）。S1/S2 仅作横向对照，不作为操作依据；M2 由 lib/regime.js 固定生成。"
+  }
 }

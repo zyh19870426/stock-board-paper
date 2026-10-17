@@ -110,6 +110,8 @@
     <a href="./">← 每日收益看板</a>
     <span class="sep">|</span>
     <a href="./backtest.html" class="on">策略回测（云端）</a>
+    <span class="sep">|</span>
+    <a href="./plan.html">改版方案</a>
     <span class="note">数据集 = 仓库内累积数据集 <code>data/store.json</code>，由每日收盘后的自动任务追加，<b>只增不减</b>；本页与本地「打板策略模拟器」共用同一份引擎源码</span>
   </div>
 
@@ -122,18 +124,29 @@
   <div id="app" style="display:none">
     <div class="card">
       <h2>策略参数 <span class="tag">改动后自动重算</span></h2>
+      <!-- ★ 2026-10-17：与线上模拟盘（paper/config.json）对齐，内置三套预设，默认 = 线上主策略 S3 -->
+      <div class="row" style="margin:0 0 10px">
+        <span style="font-size:12px;color:var(--tx2)">策略预设</span>
+        <select id="p_preset" style="border:1px solid var(--bd);border-radius:5px;padding:6px 8px;font-size:12px;background:#fff;color:var(--tx)">
+          <option value="S3" selected>S3 · 首板优化版（线上主策略）</option>
+          <option value="S1">S1 · 只买3板（对照）</option>
+          <option value="S2">S2 · 只买5板（对照）</option>
+        </select>
+        <span style="font-size:11px;color:var(--tx3)">切换即套用该套参数（本金与回测区间不变）；S4「配置 5」已下线</span>
+      </div>
       <div class="grid">
         <div class="f"><label>初始资金（元）</label><input id="p_initialCash" type="number" step="10000" value="100000"></div>
         <div class="f"><label>资金份数（最大同时持仓）</label><input id="p_slots" type="number" min="1" max="6" step="1" value="2"></div>
-        <div class="f"><label>连板数 &gt;（不含）</label><input id="p_minLbc" type="number" min="0" max="12" step="1" value="2"></div>
-        <div class="f"><label>连板数 &lt;（不含）</label><input id="p_maxLbc" type="number" min="1" max="15" step="1" value="4"><div class="hint">2&lt;板数&lt;4 → 只买 3 板</div></div>
+        <div class="f"><label>连板数 &gt;（不含）</label><input id="p_minLbc" type="number" min="0" max="12" step="1" value="0"></div>
+        <div class="f"><label>连板数 &lt;（不含）</label><input id="p_maxLbc" type="number" min="1" max="15" step="1" value="2"><div class="hint">0&lt;板数&lt;2 → 只买首板（S3）；2&lt;板数&lt;4 → 只买 3 板</div></div>
         <div class="f"><label>止损：亏损 %</label><input id="p_stopLossPct" type="number" min="1" max="30" step="0.5" value="20"></div>
-        <div class="f"><label>止损：回撤 %</label><input id="p_trailPct" type="number" min="1" max="40" step="1" value="20"></div>
+        <div class="f"><label>止损：回撤 %</label><input id="p_trailPct" type="number" min="1" max="40" step="1" value="25"></div>
         <div class="f"><label>离场规则（固定）</label><input type="text" value="断板即出 · 收盘未封涨停就卖" disabled></div>
         <div class="f"><label>最大持有上限（强制离场）</label><input id="p_maxHoldDays" type="number" min="1" max="40" step="1" value="10"></div>
         <div class="f"><label>同板优先级</label><select id="p_sortBy">
           <option value="lbc">连板数高优先 → 成交额</option>
           <option value="amount">成交额高优先</option>
+          <option value="amtRatio" selected>量能比高优先 → 成交额（S3）</option>
           <option value="seal">封板强度高优先 → 成交额</option>
         </select></div>
         <div class="f"><label>资金分配</label><select id="p_allocMode">
@@ -147,9 +160,19 @@
           <option value="120">最近 120 个交易日</option>
           <option value="175">最近 175 个交易日（全部可用）</option>
         </select></div>
+        <!-- ★ 2026-10-17 新增：S3 首板优化版的三条增强项（量能比 / 创业板名额 / 退市即出） -->
+        <div class="f"><label>量能比下限（0 = 不过滤）</label><input id="p_minAmtRatio" type="number" min="0" max="10" step="0.1" value="1.5"><div class="hint">量能比 = T 日成交额 ÷ 前 5 日均额</div></div>
+        <div class="f"><label>创业板名额上限（0 = 不限）</label><input id="p_maxGem" type="number" min="0" max="3" step="1" value="1"><div class="hint">当日最多持有几只 300/301（实测 1 只最优）</div></div>
+        <div class="f"><label>情绪闸门分位 q</label><input id="p_gateQ" type="number" min="0.5" max="0.95" step="0.01" value="0.8"><div class="hint">勾选后生效：再封率 &gt; 近 win 日 q 分位 → 次日空仓</div></div>
+        <div class="f"><label>情绪闸门窗口 win（日）</label><input id="p_gateWin" type="number" min="60" max="500" step="10" value="250"></div>
+        <div class="f"><label>回撤熔断（%）</label><input id="p_ddPct" type="number" min="10" max="60" step="1" value="35"><div class="hint">勾选后生效：净值自高点回撤达标即停手</div></div>
+        <div class="f"><label>熔断停手（交易日）</label><input id="p_ddPause" type="number" min="5" max="120" step="5" value="60"></div>
       </div>
       <div class="row">
         <label class="chk"><input id="p_skipLimitOpen" type="checkbox" checked>一字涨停开盘放弃买入（真实约束）</label>
+        <label class="chk"><input id="p_gateYz" type="checkbox" checked>情绪闸门（昨日涨停股再封率过热 → 次日不开新仓）</label>
+        <label class="chk"><input id="p_ddStop" type="checkbox" checked>账户回撤熔断（达标即停手 N 日，持仓照常卖）</label>
+        <label class="chk"><input id="p_delistExit" type="checkbox" checked>退市 / 摘牌即出（避免死仓占名额）</label>
         <label class="chk"><input id="p_trailIntraday" type="checkbox" checked>回撤止损按日内移动止损撮合（推荐）</label>
         <label class="chk"><input id="p_topOnly" type="checkbox">只买当日最高档连板（抓最高标）</label>
         <label class="chk"><input id="p_refillOnSkip" type="checkbox">弃买补位（前几名买不进时用下一名顶替）</label>
@@ -278,7 +301,23 @@ function fmtPct(x,digits){ var d = digits===undefined?2:digits; return (x*100).t
 function signCls(x){ return x>0?'up':(x<0?'dn':'mut') }
 function signed(x,digits){ var d=digits===undefined?2:digits; return (x>0?'+':'')+(x*100).toFixed(d)+'%' }
 
-var PRESET = {initialCash:100000,slots:2,minLbc:2,maxLbc:4,stopLossPct:20,trailPct:20,maxHoldDays:10,sortBy:'lbc',allocMode:'dynamic',skipLimitOpen:true,trailIntraday:true,topOnly:false,refillOnSkip:false,boardFilter:'main',window:60}
+/* ★ 2026-10-17：默认预设改为线上主策略 S3「首板优化版」（与 paper/config.json 逐字一致）。
+ *   S1 / S2 保留为横向对照；S4「配置 5」（3板3份）已下线。
+ *   ★ 字段命名与 lib/strategy.js 一致：gateYz/ddStop 用对象，minAmtRatio/maxGem 用数值或 null，
+ *     UI 上拆成「勾选框 + 数字」只是为了好填，读参时再组装。 */
+var STRAT_PRESETS = {
+  S3: {slots:2,minLbc:0,maxLbc:2,stopLossPct:20,trailPct:25,maxHoldDays:10,sortBy:'amtRatio',minAmtRatio:1.5,
+       allocMode:'dynamic',skipLimitOpen:true,trailIntraday:true,topOnly:false,refillOnSkip:false,boardFilter:'main',
+       gateYz:{q:0.80,win:250},ddStop:{ddPct:35,pauseDays:60},maxGem:1,delistExit:true},
+  S1: {slots:2,minLbc:2,maxLbc:4,stopLossPct:20,trailPct:20,maxHoldDays:10,sortBy:'lbc',minAmtRatio:0,
+       allocMode:'dynamic',skipLimitOpen:true,trailIntraday:true,topOnly:false,refillOnSkip:false,boardFilter:'main',
+       gateYz:null,ddStop:null,maxGem:0,delistExit:false},
+  S2: {slots:2,minLbc:4,maxLbc:6,stopLossPct:20,trailPct:20,maxHoldDays:10,sortBy:'lbc',minAmtRatio:0,
+       allocMode:'dynamic',skipLimitOpen:true,trailIntraday:true,topOnly:false,refillOnSkip:false,boardFilter:'main',
+       gateYz:null,ddStop:null,maxGem:0,delistExit:false}
+}
+/* ddStop.ddPct 在 UI 上按「百分比」填写（35 = 35%），传给引擎前会 /100 */
+var PRESET = Object.assign({initialCash:100000,window:60}, STRAT_PRESETS.S3)
 var last = null
 
 /* 封板强度数据：单文件版已内联进数据集；源码版尝试同目录读取 output/seal-map.json（读不到则回退成交额排序） */
@@ -373,6 +412,7 @@ function start(){
     '6. 费用：佣金万 2.5（最低 5 元）+ 印花税卖出千 0.5 + 过户费十万分之 1，买卖双边计入。<br>'+
     '7. 连续<b>一字跌停</b>时挂单无法成交，止损会被动延迟（回测已模拟该情形）——这是打板策略最极端的下行风险，单笔亏损可远超 5%。<br>'+
     '8. 全部为<b>事后回放</b>，不含未来函数；但不构成任何投资建议。'
+  applyPreset('S3')     /* ★ 首屏即线上主策略（与云端 config.json 一致） */
   bind()
   run()
 }
@@ -397,28 +437,66 @@ function readParams(){
     trailIntraday: $('p_trailIntraday').checked,
     topOnly: $('p_topOnly').checked,
     boardFilter: $('p_boardFilter').checked ? 'all':'main',
+    /* ★ 2026-10-17 新增三项增强（S3 首板优化版）：
+       未勾选 / 填 0 时一律传 null 或 false —— 与引擎默认值一致，行为与旧版完全相同。 */
+    minAmtRatio: Number($('p_minAmtRatio').value) > 0 ? Number($('p_minAmtRatio').value) : null,
+    maxGem: Number($('p_maxGem').value) > 0 ? Number($('p_maxGem').value) : null,
+    delistExit: $('p_delistExit').checked,
+    gateYz: $('p_gateYz').checked
+      ? { q: Number($('p_gateQ').value) || 0.8, win: Number($('p_gateWin').value) || 250 }
+      : null,
+    ddStop: $('p_ddStop').checked
+      ? { ddPct: (Number($('p_ddPct').value) || 35) / 100, pauseDays: Number($('p_ddPause').value) || 60 }
+      : null,
     endIdx: end,
     startIdx: Math.max(DS.warmup, end-w+1)
   }
 }
 
+/* 把一套预设写回表单（不改变本金与回测区间） */
+function applyPreset(key){
+  var p = STRAT_PRESETS[key]
+  if(!p) return
+  $('p_slots').value = p.slots
+  $('p_minLbc').value = p.minLbc
+  $('p_maxLbc').value = p.maxLbc
+  $('p_stopLossPct').value = p.stopLossPct
+  $('p_trailPct').value = p.trailPct
+  $('p_maxHoldDays').value = p.maxHoldDays
+  $('p_sortBy').value = p.sortBy
+  $('p_allocMode').value = p.allocMode
+  $('p_skipLimitOpen').checked = p.skipLimitOpen
+  $('p_trailIntraday').checked = p.trailIntraday
+  $('p_topOnly').checked = p.topOnly
+  $('p_refillOnSkip').checked = p.refillOnSkip
+  $('p_boardFilter').checked = (p.boardFilter === 'all')
+  $('p_minAmtRatio').value = p.minAmtRatio || 0
+  $('p_maxGem').value = p.maxGem || 0
+  $('p_delistExit').checked = !!p.delistExit
+  $('p_gateYz').checked = !!p.gateYz
+  $('p_gateQ').value = p.gateYz ? p.gateYz.q : 0.80
+  $('p_gateWin').value = p.gateYz ? p.gateYz.win : 250
+  $('p_ddStop').checked = !!p.ddStop
+  $('p_ddPct').value = p.ddStop ? p.ddStop.ddPct : 35
+  $('p_ddPause').value = p.ddStop ? p.ddStop.pauseDays : 60
+  $('p_preset').value = key
+}
+
 function bind(){
-  var ids=['p_initialCash','p_slots','p_minLbc','p_maxLbc','p_stopLossPct','p_trailPct','p_maxHoldDays','p_sortBy','p_allocMode','p_window','p_skipLimitOpen','p_trailIntraday','p_topOnly','p_refillOnSkip','p_boardFilter']
+  var ids=['p_initialCash','p_slots','p_minLbc','p_maxLbc','p_stopLossPct','p_trailPct','p_maxHoldDays','p_sortBy','p_allocMode','p_window','p_skipLimitOpen','p_trailIntraday','p_topOnly','p_refillOnSkip','p_boardFilter','p_minAmtRatio','p_maxGem','p_gateYz','p_gateQ','p_gateWin','p_ddStop','p_ddPct','p_ddPause','p_delistExit']
   var timer=null
   ids.forEach(function(id){
     $(id).addEventListener('input',function(){ clearTimeout(timer); timer=setTimeout(run,260) })
     $(id).addEventListener('change',function(){ clearTimeout(timer); timer=setTimeout(run,60) })
   })
   $('btnRun').onclick=run
+  /* ★ 预设下拉：切换即套用（S3 = 线上主策略，默认） */
+  $('p_preset').addEventListener('change', function(){ applyPreset(this.value); run() })
+  /* 「恢复默认」= 回到 S3 首板优化版（线上主策略） */
   $('btnReset').onclick=function(){
-    $('p_initialCash').value=PRESET.initialCash; $('p_slots').value=PRESET.slots
-    $('p_minLbc').value=PRESET.minLbc; $('p_maxLbc').value=PRESET.maxLbc
-    $('p_stopLossPct').value=PRESET.stopLossPct; $('p_trailPct').value=PRESET.trailPct
-    $('p_maxHoldDays').value=PRESET.maxHoldDays; $('p_sortBy').value=PRESET.sortBy
-    $('p_allocMode').value=PRESET.allocMode; $('p_window').value=PRESET.window
-    $('p_skipLimitOpen').checked=PRESET.skipLimitOpen; $('p_trailIntraday').checked=PRESET.trailIntraday
-    $('p_topOnly').checked=PRESET.topOnly; $('p_boardFilter').checked=false
-    $('p_refillOnSkip').checked=false
+    $('p_initialCash').value=PRESET.initialCash
+    $('p_window').value=PRESET.window
+    applyPreset('S3')
     run()
   }
   $('btnCsv').onclick=exportCsv
@@ -469,11 +547,18 @@ function humanize(P, s){
   if(rng){
     o.push('每天收盘后，从全市场里挑<b>连板 '+rng+'</b>的票'+(P.topOnly?'（只保留当日最高那一档，其余档位不要）':'')
       + (P.sortBy==='seal' ? '，按<b>封板强度</b>从高到低排（开盘就封住的最强，越晚封、炸板越多的越弱），强度一样再看成交额'
-        : (P.sortBy==='lbc' ? '，连板数高的优先，连板数一样再看谁成交额大' : '，按成交额从大到小排'))
+        : (P.sortBy==='lbc' ? '，连板数高的优先，连板数一样再看谁成交额大'
+        : (P.sortBy==='amtRatio' ? '，按<b>量能比</b>（当日成交额 ÷ 前 5 日均额）从高到低排' : '，按成交额从大到小排')))
       + '，最多同时拿 '+P.slots+' 只。')
   }else{
     o.push('<b>注意：连板下限不小于上限，这个区间是空的，跑不出任何一笔交易。</b>')
   }
+  /* ★ 2026-10-17 新增：把 S3 的三条增强项也翻译成人话，避免「参数勾了但不知道在干什么」 */
+  if(P.minAmtRatio) o.push('只考虑<b>量能比 ≥ '+P.minAmtRatio+'</b> 的票（量能比 = 当日成交额 ÷ 前 5 个交易日的平均成交额），量能没放大的直接不看。')
+  if(P.maxGem) o.push('创业板（300/301）<b>每天最多拿 '+P.maxGem+' 只</b>，其余名额留给主板（实测：创业板单笔期望低于主板，限 1 只后主板单笔收益从 +1.13% 升到 +1.27%）。')
+  if(P.gateYz) o.push('开了<b>情绪闸门</b>：每天收盘算一遍「昨天涨停的票，今天又有多少只重新封住」（再封率）。这个比例一旦高于最近 <b>'+(P.gateYz.win||250)+' 天</b>的 <b>'+Math.round((P.gateYz.q==null?0.8:P.gateYz.q)*100)+'% 分位</b>（说明情绪过热），<b>第二天就不开新仓</b>；手里有的照常按规则卖。')
+  if(P.ddStop) o.push('开了<b>回撤熔断</b>：账户净值比历史最高点回撤 <b>≥ '+Math.round((P.ddStop.ddPct||0)*100)+'%</b>，就停手 <b>'+(P.ddStop.pauseDays||0)+' 个交易日</b>不开新仓（持仓仍照常卖出），期满重新起算。')
+  if(P.delistExit) o.push('持仓股若<b>退市 / 摘牌</b>，按最后可得价强制清仓，不让死仓长期占着名额。')
   o.push('选中的票，在<b>第二天开盘时买入</b>。'
     + (P.skipLimitOpen ? '如果第二天直接一字涨停开盘，就放弃这只——现实里买不进，不追。' : '即使一字涨停开盘也照价买入（已关闭现实约束）。'))
   if(P.refillOnSkip){
@@ -570,6 +655,17 @@ function cfgApply(id){
   $('p_trailIntraday').checked = p.trailIntraday!==false
   $('p_topOnly').checked = !!p.topOnly
   $('p_boardFilter').checked = (p.boardFilter==='all')
+  /* ★ 2026-10-17 新增项（老配置里没有 → 落到引擎默认值，行为不变） */
+  $('p_minAmtRatio').value = p.minAmtRatio || 0
+  $('p_maxGem').value = p.maxGem || 0
+  $('p_delistExit').checked = !!p.delistExit
+  $('p_gateYz').checked = !!p.gateYz
+  $('p_gateQ').value = p.gateYz ? p.gateYz.q : 0.80
+  $('p_gateWin').value = p.gateYz ? p.gateYz.win : 250
+  $('p_ddStop').checked = !!p.ddStop
+  $('p_ddPct').value = p.ddStop ? Math.round((p.ddStop.ddPct || 0) * 100) : 35
+  $('p_ddPause').value = p.ddStop ? p.ddStop.pauseDays : 60
+  $('p_preset').value = presetKeyOf(p)
   $('cfgName').value = c.name
   run()
   try{ window.scrollTo({top:0,behavior:'smooth'}) }catch(e){ window.scrollTo(0,0) }
@@ -584,7 +680,24 @@ var winCache = Object.create(null)
 
 function pkey (P) {
   return [P.initialCash, P.slots, P.minLbc, P.maxLbc, P.stopLossPct, P.trailPct, P.maxHoldDays,
-    P.sortBy, P.allocMode, P.topOnly, P.refillOnSkip, P.skipLimitOpen, P.trailIntraday, P.boardFilter].join('|')
+    P.sortBy, P.allocMode, P.topOnly, P.refillOnSkip, P.skipLimitOpen, P.trailIntraday, P.boardFilter,
+    P.minAmtRatio == null ? '-' : P.minAmtRatio, P.maxGem == null ? '-' : P.maxGem, !!P.delistExit,
+    P.gateYz ? (P.gateYz.q + '/' + P.gateYz.win) : '-',
+    P.ddStop ? (P.ddStop.ddPct + '/' + P.ddStop.pauseDays) : '-'].join('|')
+}
+/* 反查「这套参数对应哪个预设」：命中则下拉显示预设名，否则保持当前选择 */
+function presetKeyOf (P) {
+  for (var k in STRAT_PRESETS) {
+    var q = STRAT_PRESETS[k]
+    var same = q.slots === P.slots && q.minLbc === P.minLbc && q.maxLbc === P.maxLbc &&
+      q.trailPct === P.trailPct && q.sortBy === P.sortBy &&
+      (q.minAmtRatio || 0) === (P.minAmtRatio || 0) && (q.maxGem || 0) === (P.maxGem || 0) &&
+      !!q.delistExit === !!P.delistExit &&
+      (q.gateYz ? q.gateYz.q + '/' + q.gateYz.win : '-') === (P.gateYz ? P.gateYz.q + '/' + P.gateYz.win : '-') &&
+      (q.ddStop ? (q.ddStop.ddPct / 100) + '/' + q.ddStop.pauseDays : '-') === (P.ddStop ? P.ddStop.ddPct + '/' + P.ddStop.pauseDays : '-')
+    if (same) return k
+  }
+  return ''
 }
 
 /* 对单套方案跑 5 个时间窗口（连板表已缓存，单次 <1ms，可直接同步算） */
@@ -750,12 +863,15 @@ function cfgSyncAfterChange () {
 }
 
 /* 策略参数标准化：字段顺序固定，保证「本地方案 ↔ 云端策略」可逐字比对（识别是否已在跑） */
+/* ★ 2026-10-17：补齐 S3 的 5 个新字段，保证「本页参数 ↔ 云端 config.json」可逐字比对（识别是否已在跑） */
 var PARAM_ORDER = ['slots', 'minLbc', 'maxLbc', 'stopLossPct', 'trailPct', 'exitMode', 'maxHoldDays',
-  'sortBy', 'allocMode', 'refillOnSkip', 'skipLimitOpen', 'trailIntraday', 'topOnly', 'boardFilter']
+  'sortBy', 'allocMode', 'refillOnSkip', 'skipLimitOpen', 'trailIntraday', 'topOnly', 'boardFilter',
+  'minAmtRatio', 'maxGem', 'delistExit', 'gateYz', 'ddStop']
 var PARAM_DEF = {
   slots: 2, minLbc: 2, maxLbc: 4, stopLossPct: 20, trailPct: 20, exitMode: 'break', maxHoldDays: 10,
   sortBy: 'lbc', allocMode: 'dynamic', refillOnSkip: false, skipLimitOpen: true,
-  trailIntraday: true, topOnly: false, boardFilter: 'main'
+  trailIntraday: true, topOnly: false, boardFilter: 'main',
+  minAmtRatio: null, maxGem: null, delistExit: false, gateYz: null, ddStop: null
 }
 function cleaned (P) {
   var o = {}

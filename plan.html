@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>打板模拟盘 · 改版方案 v2026-10-17（S3 首板优化版）</title>
+<style>
+  :root{
+    --bg:#f4f5f7; --card:#fff; --bd:#e4e7ec; --bd2:#eef0f3;
+    --tx:#1f2328; --tx2:#6b7280; --tx3:#9aa1ab;
+    --up:#d92b2b; --dn:#0a8f3c; --accent:#1a73e8; --warn:#b45309; --ok:#0a8f3c;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--tx);
+    font:13px/1.75 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;}
+  .wrap{max-width:1180px;margin:0 auto;padding:18px 16px 70px}
+  h1{font-size:20px;margin:0 0 4px;font-weight:650;letter-spacing:.2px}
+  .sub{color:var(--tx2);font-size:12px;margin-bottom:14px}
+  h2{font-size:15px;margin:26px 0 10px;font-weight:650;border-left:3px solid var(--accent);padding-left:9px}
+  h3{font-size:13px;margin:18px 0 8px;font-weight:650;color:var(--tx)}
+  .card{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:14px 16px;margin-bottom:12px}
+  .cloudbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 12px;font-size:12px}
+  .cloudbar a{color:var(--accent);text-decoration:none;border:1px solid var(--bd);border-radius:5px;padding:4px 10px;background:#fff}
+  .cloudbar a.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .cloudbar .sep{color:var(--tx3)}
+  .cloudbar .note{color:var(--tx3);font-size:11px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;margin:8px 0 4px}
+  th,td{padding:6px 9px;text-align:left;border-bottom:1px solid var(--bd2);vertical-align:top}
+  th{background:#fafbfc;color:var(--tx2);font-weight:600;font-size:11.5px;white-space:nowrap}
+  td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+  tr:last-child td{border-bottom:none}
+  .up{color:var(--up)} .dn{color:var(--dn)} .mut{color:var(--tx2)}
+  code{background:var(--bd2);padding:1px 5px;border-radius:4px;font-size:12px}
+  pre{background:#f8f9fb;border:1px solid var(--bd2);border-radius:7px;padding:12px 14px;overflow-x:auto;font-size:12px;line-height:1.7;margin:8px 0}
+  .tag{display:inline-block;padding:1px 7px;border-radius:4px;font-size:11px}
+  .tag.b{background:rgba(217,43,43,.12);color:var(--up)}
+  .tag.sk{background:rgba(107,114,128,.13);color:var(--tx2)}
+  .tag.ok{background:rgba(10,143,60,.13);color:var(--ok)}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:10px;margin:10px 0 2px}
+  .kpi{border:1px solid var(--bd2);border-radius:7px;padding:9px 11px;background:#fcfcfd}
+  .kpi .k{font-size:11px;color:var(--tx2)}
+  .kpi .v{font-size:18px;font-weight:650;margin-top:2px}
+  ul{margin:6px 0 6px 0;padding-left:20px}
+  li{margin:3px 0}
+  .warn{border-left:3px solid var(--warn);background:#fffbf3;padding:9px 12px;border-radius:0 6px 6px 0;margin:10px 0;font-size:12.5px}
+  .foot{margin-top:26px;color:var(--tx3);font-size:11px;line-height:1.8}
+  @media(max-width:700px){
+    table{font-size:12px}
+    th,td{padding:5px 6px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="cloudbar">
+    <a href="./">← 每日收益看板</a>
+    <span class="sep">|</span>
+    <a href="./backtest.html">策略回测</a>
+    <span class="sep">|</span>
+    <a href="./plan.html" class="on">改版方案</a>
+    <span class="note">本页 = 后续所有改动的存档与作业手册；参数唯一真源 <code>paper/config.json</code></span>
+  </div>
+
+  <h1>打板模拟盘 · 改版方案 v2026-10-17</h1>
+  <div class="sub">主策略 <b>S3 · 首板优化版</b> · 数据集 2020-03-11 ~ 2026-10-16（可回测 1488 个交易日）· 本金 10 万/套</div>
+
+  <div class="card">
+    <h3 style="margin-top:0">0 · 一句话结论</h3>
+    <p style="margin:0 0 8px">线上主策略固定为 <b>S3「首板优化版」</b>（<code>mainStrategy:"S3"</code>）：看板默认选中它、置顶、打「主策略」标。
+    S1（3板2份）/ S2（5板2份）降级为<b>对照</b>（不作操作依据），<b>S4「配置 5」本版下线</b>，M2（跟随近10日最强）保留展示但仅作参照。</p>
+    <div class="kpis">
+      <div class="kpi"><div class="k">累计收益</div><div class="v up">+5968%</div></div>
+      <div class="kpi"><div class="k">成交笔数</div><div class="v">1032</div></div>
+      <div class="kpi"><div class="k">单笔平均</div><div class="v up">+1.02%</div></div>
+      <div class="kpi"><div class="k">显著性 t</div><div class="v up">3.33</div></div>
+      <div class="kpi"><div class="k">最大回撤</div><div class="v">44.0%</div></div>
+      <div class="kpi"><div class="k">逐年为正</div><div class="v up">7 / 7</div></div>
+      <div class="kpi"><div class="k">样本外 前/后半</div><div class="v">1137% / 419%</div></div>
+    </div>
+    <p class="mut" style="margin:8px 0 0;font-size:12px">对照：同期 S1 −68%、S2 −94%、S4 −85%、M2 −99.1%。高连板档位与动态跟随在这套口径下全为负期望。</p>
+  </div>
+
+  <h2>1 · 当前线上配置（S3 全参数）</h2>
+  <div class="card">
+<pre>{
+  "slots": 2,                              // 资金分 2 份，最多同时持 2 只
+  "minLbc": 0, "maxLbc": 2,                // 只买首板（1 板）：0 &lt; 板数 &lt; 2
+  "stopLossPct": 20,                       // 亏损止损 −20%
+  "trailPct": 25,                          // 移动回撤线 25%（自买入后最高价，日内实时上移）
+  "exitMode": "break",                     // 离场固定：断板即出（14:57 未封 → 收盘集合竞价卖，成交价＝收盘价）
+  "maxHoldDays": 10,                       // 最长持有 10 个交易日
+  "sortBy": "amtRatio",                    // 排序：量能比降序（T日成交额 ÷ 前5日均额）
+  "minAmtRatio": 1.5,                      // 量能比下限 1.5
+  "allocMode": "dynamic",                  // 每份 = 当前总资产 ÷ 份数
+  "refillOnSkip": false,                   // 弃买不补位
+  "skipLimitOpen": true,                   // 一字涨停开盘弃买（真实约束）
+  "trailIntraday": true,                   // 回撤线按日内最高价移动
+  "boardFilter": "main",                   // 主板 + 创业板，排除科创/北交所
+  "maxGem": 1,                             // ★本版新增：创业板当日最多持 1 只
+  "delistExit": true,                      // 退市/摘牌按最后可得价强制清仓
+  "gateYz": { "q": 0.80, "win": 250 },     // 情绪闸门：再封率 &gt; 近250日 80% 分位 ⇒ 次日不开新仓
+  "ddStop": { "ddPct": 0.35, "pauseDays": 60 }  // 回撤熔断：自高点回撤 ≥35% ⇒ 停手 60 个交易日
+}</pre>
+    <h3>人话版规则（可直接照着做）</h3>
+    <ul>
+      <li><b>每天收盘后选股</b>：全市场挑<b>首板</b>、<b>量能比 ≥ 1.5</b> 的票，按量能比从高到低排；<b>创业板最多 1 只</b>，其余名额给主板；次日一字涨停开盘就跳过、不补位。</li>
+      <li><b>第二天开盘买入</b>，每份金额 = 当时总资产 ÷ 2。</li>
+      <li><b>持仓盯两条线</b>：亏 20% 砍；或从买入后最高价回撤 25% 砍。</li>
+      <li><b>断板即出</b>：买入当日不能卖（T+1），从买入次日起每个交易日 14:57 看是否封板 —— 没封住就在收盘集合竞价挂单卖，成交价＝收盘价。</li>
+      <li><b>最多拿 10 个交易日</b>，到点无条件走人。</li>
+      <li><b>两个停手开关</b>（只拦开新仓，持仓照常卖）：闸门 —— 昨日涨停股今日再封率高于近 250 日 80% 分位 ⇒ 明日不开新仓；熔断 —— 净值自高点回撤 ≥35% ⇒ 停手 60 个交易日，期满重新起算。</li>
+    </ul>
+  </div>
+
+  <h2>2 · 本版已落地改动</h2>
+  <div class="card">
+    <table>
+      <tr><th>#</th><th>改动</th><th>关键证据</th><th>落地</th></tr>
+      <tr><td>T1</td><td><code>trailPct</code> 20 → <b>25</b></td><td>网格 +1838%（t 2.30→2.70）；样本外双胜（357→537%、188→249%）</td><td>config.json</td></tr>
+      <tr><td>T2</td><td><code>gateYz.q</code> 0.70 → <b>0.80</b></td><td>网格 +2607%（t 2.30→2.83，回撤 59.9%→49.5%）；样本外双胜</td><td>config.json</td></tr>
+      <tr><td>T3</td><td>S3 置顶为<b>主策略</b></td><td>跨年 7/7 正收益，全区间唯一显著为正</td><td>config.json / sim.js / 看板徽章</td></tr>
+      <tr><td>T4</td><td>看板<b>风控可视化</b></td><td>人为跟随需要：闸门今日是否拦下、熔断剩余天数、止损/回撤线、每份金额</td><td>sim.js(risk) / 看板卡片</td></tr>
+      <tr><td>T5</td><td><b>创业板名额上限 <code>maxGem=1</code></b></td><td>+5968%（+36%）、t 3.15→3.33、回撤 47.7%→44.0% —— 收益↑/显著性↑/回撤↓ 三项全优</td><td>config.json / strategy.js</td></tr>
+      <tr><td>T6</td><td><b>成交明细瘦身</b>（去 代码/板数/备注 → 6 列）</td><td>人工跟随只需「哪天、买卖、哪只票、价、量、盈亏」</td><td>看板 index.html</td></tr>
+      <tr><td>T7</td><td><b>S4 下线</b></td><td>与 S1 同质、全区间 −85%、0/7 年为正</td><td>config.json</td></tr>
+      <tr><td>T8</td><td><b>回测模拟器同步</b></td><td>预设 S1/S2/S3（默认 S3）、补齐 5 个新参数控件、签名与云端可逐字比对</td><td>backtest.html / 单文件版</td></tr>
+    </table>
+  </div>
+
+  <h2>3 · 关键证据</h2>
+
+  <h3>3.1 参数敏感度（全区间，基线 = 改动前 S3）</h3>
+  <div class="card">
+    <table>
+      <tr><th>维度</th><th class="n">线上</th><th>相邻取值</th><th>结论</th></tr>
+      <tr><td>trailPct</td><td class="n"><b>25%</b></td><td>20% → +969%（t 2.30）；30% → +1824%；10% → <span class="dn">−57%</span></td><td>回撤线太紧会把策略做成负期望；25% 是甜点</td></tr>
+      <tr><td>gateYz.q</td><td class="n"><b>0.80</b></td><td>0.70 → +970%；0.75 → +1090%；0.85 → +1173%</td><td>0.80 最优；<b>改 q 必须重跑 maxGem 检验</b></td></tr>
+      <tr><td>gateYz.win</td><td class="n"><b>250</b></td><td>60 / 125 / 375 / 500 均劣于 250</td><td>窗口越短越像噪声</td></tr>
+      <tr><td>ddStop.ddPct</td><td class="n"><b>0.35</b></td><td>0.20 → +889%（但后半段仅 +20%）；0.60 → +592%</td><td>0.35 是前后半段都站得住的取值</td></tr>
+      <tr><td>pauseDays</td><td class="n"><b>60</b></td><td>20 → +1516%（回撤 56.3%）；120 → +627%（逐年 3/7）</td><td>60 是稳健与收益的平衡点</td></tr>
+      <tr><td>slots</td><td class="n"><b>2</b></td><td>1 份 +210%；3 份 +2462%；4 份 +743%；5 份 +1592%（t 3.53 最高）</td><td>2 份是<b>收益甜点</b>；5 份是稳健甜点（未采用）</td></tr>
+      <tr><td>minAmtRatio</td><td class="n"><b>1.5</b></td><td>0~2 完全一样；≥2.5 起下滑</td><td>保留为「保险丝」，不调</td></tr>
+      <tr><td>maxHoldDays</td><td class="n"><b>10</b></td><td>5 日 +681%；7 日 +758%；15 日＝10 日</td><td>10 日足够</td></tr>
+      <tr><td>stopLossPct</td><td class="n"><b>20</b></td><td>15% 反而 +1659%（依赖路径，未采信）；25/30% 与 20% 一致</td><td>保持 20</td></tr>
+    </table>
+  </div>
+
+  <h3>3.2 样本外一致性（前半 2020-08-24~2023-09-13 / 后半 2023-09-14~2026-10-16）</h3>
+  <div class="card">
+    <table>
+      <tr><th>候选</th><th class="n">前半</th><th class="n">后半</th><th class="n">后半 t</th><th>结论</th></tr>
+      <tr><td>trail 25%</td><td class="n">537%</td><td class="n">249%</td><td class="n">1.69</td><td><span class="tag ok">采用</span></td></tr>
+      <tr><td>q = 0.80</td><td class="n">626%</td><td class="n">309%</td><td class="n">1.77</td><td><span class="tag ok">采用</span></td></tr>
+      <tr><td><b>组合 trail25 + q0.80</b></td><td class="n"><b>867%</b></td><td class="n"><b>391%</b></td><td class="n"><b>1.95</b></td><td><span class="tag ok">即现网基线</span></td></tr>
+      <tr><td>熔断停手 20 日</td><td class="n">468%</td><td class="n">226%</td><td class="n">1.63</td><td><span class="tag sk">回撤升到 50.8%，未采用</span></td></tr>
+      <tr><td>熔断阈值 20%</td><td class="n">904%</td><td class="n">21%</td><td class="n">0.62</td><td><span class="tag b">后半崩</span></td></tr>
+      <tr><td>份数 3</td><td class="n">503%</td><td class="n">83%</td><td class="n">1.24</td><td><span class="tag b">后半崩</span></td></tr>
+    </table>
+    <p class="mut" style="font-size:12px;margin:6px 0 0">采信标准：<b>两半都赢、且后半 t 更高</b>。</p>
+  </div>
+
+  <h3>3.3 创业板名额 <code>maxGem=1</code>（本版最大改动）</h3>
+  <div class="card">
+    <table>
+      <tr><th>变体</th><th class="n">收益</th><th class="n">笔数</th><th class="n">单笔</th><th class="n">t</th><th class="n">回撤</th><th class="n">创业板占比</th></tr>
+      <tr><td>不限（改动前）</td><td class="n">4383%</td><td class="n">1042</td><td class="n">0.98%</td><td class="n">3.15</td><td class="n">47.7%</td><td class="n">36%</td></tr>
+      <tr><td><b>最多 1 只创业板（现网）</b></td><td class="n up"><b>5968%</b></td><td class="n">1032</td><td class="n up"><b>1.02%</b></td><td class="n up"><b>3.33</b></td><td class="n up"><b>44.0%</b></td><td class="n">31%</td></tr>
+      <tr><td>完全剔除创业板</td><td class="n">1783%</td><td class="n">946</td><td class="n">0.90%</td><td class="n">2.54</td><td class="n">54.9%</td><td class="n">0%</td></tr>
+    </table>
+    <h3>四道防伪检验（后续任何新改动都照此做）</h3>
+    <ul>
+      <li><b>对称性</b>：限制主板最多 1 只 → 收益小升但 t↓（3.15→3.04）、回撤↑（→51.5%）；只有限创业板做到三项全优。</li>
+      <li><b>安慰剂</b>：按代码奇偶随机切一半股票、限其最多 1 只 → <b>3484%（−20%）、t↓、回撤↑</b>，方向完全相反 ⇒ 效果来自创业板本身，不是集中度也不是巧合。</li>
+      <li><b>邻域</b>：固定 q=0.80 扫 trail 21~29 → <b>9/9 全胜且 t 每一格都提升</b>。</li>
+      <li><b>压力测试</b>：创业板单笔被打到 −2% 时本档仍 +178%（现状仅 +17%）；盈亏平衡点 −1.57% → <b>−2.31%</b>。</li>
+    </ul>
+    <div class="warn"><b>红线</b>：<code>q ≥ 0.82</code> 时 <code>maxGem=1</code> 出现断崖（−1651 ~ −3624pp）。<b>以后调 q 必须重跑本节检验。</b></div>
+  </div>
+
+  <h3>3.4 为什么不做「跨年自动换档」（M2）</h3>
+  <div class="card">
+    <ul>
+      <li>M2 在 1488 个交易日里<b>切换 266 次</b>，平均每段只持有 <b>5.6 个交易日</b>；全区间 <b>−99.1%</b>，跑输所有固定档位。</li>
+      <li>每年「最强档位」确实不同（2021 五板 +107%、2022/2024/2025 三板最好、2026 首板最好），但跟随逻辑<b>抓不住</b> —— 它用「近 10 日净值涨幅」做判据，本质是追已经涨完的那一段。</li>
+      <li>S3 的利润结构：<b>86% 的笔只有 1 板（单笔 −0.84%），14% 走出连板的笔单笔 +11.92%</b>，连板溢价 12.76pp/笔。频繁切换会<b>恰好切掉这 14%</b>。</li>
+      <li>结论：<b>M2 保留展示，不作操作依据</b>。</li>
+    </ul>
+  </div>
+
+  <h2>4 · 已否决的改动（存档 · 别再试第二次）</h2>
+  <div class="card">
+    <table>
+      <tr><th>改动</th><th>实测</th><th>否决原因</th></tr>
+      <tr><td>① 连续仓位 <code>sizeYz</code>（仓位随再封率连续收缩，替代闸门硬开关）</td><td>4383% → <b>787%</b></td><td>原始假设「越冷越满仓」与实测<b>相反</b>：温度与收益是<b>倒 U</b> —— 最冷 +0.26%、中性 +1.61% 最好、最热 +0.27%。倒 U 修正版 +3337%（t=2.97）仍不如现网</td></tr>
+      <tr><td>② 只做主板 <code>excludeGem</code></td><td>4383% → <b>1783%</b></td><td>收益腰斩、t 降到 2.54、回撤反而升到 54.9%。正确做法是<b>限 1 只</b>而非剔除</td></tr>
+      <tr><td>③ 封板率 <code>seal</code> 因子</td><td>无法测</td><td>历史数据里封板率<b>全为 null</b>；改用 <code>closePos</code> 代理后改善在邻域内乱跳、无单调性、方向自相矛盾 → 噪声</td></tr>
+      <tr><td>④ 份数甜点（3 份 / 5 份）</td><td>3 份 2462%（后半仅 83%）；5 份 1592%（t 3.53、回撤 43.1%）</td><td>裁决：<b>都不动，只跑 S3</b></td></tr>
+      <tr><td>⑤ 跨年自动换档（M2 类）</td><td>−99.1%、切换 266 次</td><td>见 3.4</td></tr>
+      <tr><td>⑥ S1/S2/S4 上补量能比 / 闸门等因子</td><td>—</td><td>裁决：<b>不动，只跑 S3</b>，其余仅作对照</td></tr>
+    </table>
+  </div>
+
+  <h2>5 · 文件与职责</h2>
+  <div class="card">
+    <table>
+      <tr><th>文件</th><th>作用</th><th>本版</th></tr>
+      <tr><td><code>paper/config.json</code></td><td>线上唯一参数源（<code>mainStrategy</code>、S1/S2/S3）</td><td>✅ 去 S4、补字段释义</td></tr>
+      <tr><td><code>paper/lib/strategy.js</code></td><td>回测 + 线上共用引擎（<code>maxGem</code>/<code>delistExit</code>/<code>gateYz</code>/<code>ddStop</code>，及默认关闭的 <code>excludeGem</code>/<code>sizeYz</code>/<code>maxMain</code>/<code>maxRand</code>）</td><td>已同步</td></tr>
+      <tr><td><code>paper/lib/sim.js</code></td><td>主策略置顶 + <code>isRef</code> + <code>risk</code>（风控状态）</td><td>T3/T4 已落地</td></tr>
+      <tr><td><code>paper/index.html</code></td><td>看板（默认选中 S3、主策略徽章、风控卡片、成交明细 6 列）</td><td>✅ 成交明细瘦身</td></tr>
+      <tr><td><code>index.html</code>（根）</td><td><b>回测模拟器源码</b>；<code>paper/backtest.html</code> 与 <code>打板策略模拟器.html</code> 都由它生成</td><td>✅ 预设 + 新参数</td></tr>
+      <tr><td><code>build-standalone.js</code>（根）</td><td>打包单文件 <code>打板策略模拟器.html</code></td><td>重新打包</td></tr>
+      <tr><td><code>paper/push-github.js</code></td><td>推送 <code>paper/</code> 到 GitHub（走 API，token 只从环境变量读）</td><td>—</td></tr>
+    </table>
+  </div>
+
+  <h2>6 · 后续更新 SOP</h2>
+  <div class="card">
+    <ul>
+      <li><b>1 本地改</b>：只改 <code>paper/config.json</code>。</li>
+      <li><b>2 扫网格</b>：<code>node hist-gate-grid.js</code> —— 看是否单调、是否有邻域支撑。</li>
+      <li><b>3 样本外</b>：<code>node hist-oos-check.js</code> —— 前后半段双胜 + 后半 t 不降。</li>
+      <li><b>4 防伪三件套</b>：对称性对照 / 安慰剂 / 邻域扫（trail × q 25 格）。模板见 <code>hist-gem-cap.js</code>。</li>
+      <li><b>5 备份</b>：<code>paper/_rollback/&lt;名字&gt;-&lt;时间戳&gt;/</code>。</li>
+      <li><b>6 同步引擎</b>（若改了 lib）：<code>cd paper &amp;&amp; node sync-engine.js</code>。</li>
+      <li><b>7 重生成页面</b>：<code>node build-cloud.js</code>（云端回测页）、<code>node build-standalone.js</code>（单文件版）。</li>
+      <li><b>8 推送</b>：<code>GH_TOKEN=xxx node paper/push-github.js</code>，等 <code>daily.yml</code> 跑完核对。</li>
+      <li><b>9 看板核对</b>：主策略徽章、风控状态、成交明细列数。</li>
+    </ul>
+    <div class="warn">
+      <b>红线</b>：<br>
+      · 改 <code>gateYz.q</code> 到 ≥0.82 必须重跑 <code>maxGem</code> 检验（断崖）。<br>
+      · 只看「全区间收益」就上线 = 赌博，<b>必须过样本外双胜</b>。<br>
+      · 短窗口（滚动 2 年 / 逐年）对复利策略<b>判别力天然不足</b> —— 实测安慰剂 3/8、全区间最差的变体反而 5/8。以「全区间复利路径 + t 值 + 压力测试」为准。<br>
+      · 引擎默认值只加<b>默认关闭</b>的开关，保证老配置行为不变。
+    </div>
+  </div>
+
+  <h2>7 · 回滚</h2>
+  <div class="card">
+    <table>
+      <tr><th>回滚点</th><th>目录</th></tr>
+      <tr><td>加 <code>maxGem</code> 之前</td><td><code>paper/_rollback/s3-gem-20261017-1610/</code></td></tr>
+      <tr><td>调 trail / q 之前</td><td><code>paper/_rollback/s3-tune-20261017-1430/</code></td></tr>
+      <tr><td>S3 首板优化版上线前</td><td><code>paper/_rollback/s3-opt-20261017-1305/</code></td></tr>
+      <tr><td><b>本版（去 S4 + 成交明细瘦身）</b></td><td><code>paper/_rollback/s4-drop-20261017-1645/</code></td></tr>
+    </table>
+    <p class="mut" style="font-size:12px;margin:6px 0 0">回滚办法：把对应目录里的 <code>config.json</code> 拷回 <code>paper/</code> 推上去即可 —— 引擎无需回退（新增开关都是默认关闭的）。</p>
+  </div>
+
+  <h2>8 · 待办 / 已知风险</h2>
+  <div class="card">
+    <ul>
+      <li><code>delistExit</code> 尚未补到 S1/S2（按「只跑 S3」的裁决可暂不补）。</li>
+      <li>推送用的 GitHub token 曾在对话里明文出现，建议撤销重发。</li>
+      <li>线上真实账户只有 3 个净值点（起点 2026-10-14），换参数只重算 3 天；<b>长期差异要看「回放曲线」</b>。</li>
+      <li>S3 的 86% 笔是亏的（单笔 −0.84%），全部利润来自 14% 的连板笔 —— <b>执行偏差（漏买、追高）会显著放大亏损</b>，人工跟随时务必按规则买在开盘、不挑票。</li>
+    </ul>
+  </div>
+
+  <div class="foot">
+    本页由 <code>打板策略-改版方案-v20261017.md</code> 渲染，随仓库一起发布 · 数据 2020-03-11 ~ 2026-10-16 · 全部为事后回放、不含未来函数，不构成投资建议。<br>
+    生成时间：2026-10-17
+  </div>
+</div>
+</body>
+</html>

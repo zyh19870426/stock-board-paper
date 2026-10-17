@@ -203,7 +203,7 @@
 
 <!-- 移动端：抽屉触发按钮（PC 端隐藏）。显示当前策略，点了从左滑出策略列表 -->
 <button class="menubtn" id="menubtn" aria-label="打开策略列表">
-  <span style="font-size:15px;line-height:1">☰</span><span>策略</span><span class="cur" id="menucur">M2</span>
+  <span style="font-size:15px;line-height:1">☰</span><span>策略</span><span class="cur" id="menucur">S3</span>
 </button>
 <!-- 移动端：抽屉遮罩，点它收起 -->
 <div class="scrim" id="scrim"></div>
@@ -217,9 +217,10 @@
     <div id="sidelist"></div>
     <div class="snote">
       <div>点选任意策略 → 看该套详情</div>
-      <div style="margin-top:5px">看板默认停在 <b style="color:#c084fc">M2</b>（跟随·近10日最强）</div>
+      <div style="margin-top:5px">看板默认停在 <b style="color:#c084fc">S3</b>（首板优化版 · 线上主策略）</div>
       <div style="margin-top:5px">各策略独立 10 万本金、互不干扰</div>
       <div style="margin-top:5px"><a href="./backtest.html" style="color:var(--accent)">策略回测（可改任意参数）→</a></div>
+      <div style="margin-top:5px"><a href="./plan.html" style="color:var(--accent)">改版方案 / 更新手册 →</a></div>
     </div>
   </aside>
 
@@ -266,7 +267,9 @@
 
 <script>
 'use strict'
-var DATA = null, WIN = 0, CUR = 'M2'
+/* ★ CUR 初值留空：render() 会自动落到 DATA.mainId（= 线上主策略 S3）。
+   早先写死 'M2'，导致 M2 存在时永远不会被主策略覆盖，默认页停在对照策略上。 */
+var DATA = null, WIN = 0, CUR = ''
 var PAL = ['#c084fc', '#4aa3f0', '#f0a04a', '#4dd0a0', '#f472b6', '#facc15', '#38bdf8', '#fb923c']
 var IDS = []
 function colorOf (id) {
@@ -558,13 +561,18 @@ function renderDetail(){
   ;(s.positions||[]).forEach(function(p){ evs.push({d:p.buyDate, ty:'买入', code:p.code, name:p.name, lbc:p.lbc, sh:p.shares, p:p.buyC, tag:'b', open:'持仓中'}) })
   evs.sort(function(a,b){ return a.d===b.d ? (a.ty<b.ty?-1:1) : (a.d<b.d?1:-1) })
   h += evs.length
-    ? '<table><tr class="thead"><th class="l">日期</th><th class="l">操作</th><th class="l">代码</th><th class="l">名称</th><th>板</th><th>价格</th><th>股数</th><th>盈亏</th><th class="l">备注</th></tr>'
+    /* ★ 2026-10-17：按用户要求瘦身为 6 列 —— 去掉「代码 / 板数 / 备注」。
+       理由：人工跟随只需要「哪天、买卖、哪只票、多少钱、多少股、赚亏多少」；
+       代码与连板数在「明日买入计划」「今日持仓」里已有，备注（卖出原因）单列一列会把表撑得很宽。
+       ★ 手机端仍走 data-l 卡片布局，6 列在窄屏一行一张卡，宽度天然对齐。 */
+    ? '<table class="tbl-trades"><colgroup><col style="width:14%"><col style="width:12%"><col class="cname" style="width:26%"><col style="width:16%"><col style="width:14%"><col style="width:18%"></colgroup>'
+      + '<tr class="thead"><th class="l">日期</th><th class="l">操作</th><th class="l">名称</th><th>价格</th><th>股数</th><th>盈亏</th></tr>'
       + evs.map(function(e){
           var pnl = e.tag==='s' ? '<span class="'+cls(e.pnl)+'">'+signYuan(e.pnl)+'（'+pct(e.pp)+'）</span>' : (e.open?'<span class="tag sk">'+e.open+'</span>':'')
           /* ★ data-l 供窄屏卡片布局当字段名 */
           return '<tr><td class="l" data-l="日期">'+e.d+'</td><td class="l" data-l="操作"><span class="tag '+e.tag+'">'+e.ty+'</span></td>'
-            +'<td class="l" data-l="代码">'+e.code+'</td><td class="l" data-l="名称">'+e.name+'</td><td data-l="板">'+e.lbc+'</td>'
-            +'<td data-l="价格">'+price(e.p)+'</td><td data-l="股数">'+e.sh+'</td><td data-l="盈亏">'+pnl+'</td><td class="l" data-l="备注" style="color:var(--tx2)">'+(e.reason||'')+'</td></tr>'
+            +'<td class="l" data-l="名称">'+e.name+'</td>'
+            +'<td data-l="价格">'+price(e.p)+'</td><td data-l="股数">'+e.sh+'</td><td data-l="盈亏">'+pnl+'</td></tr>'
         }).join('') + '</table>'
     : '<div class="empty">暂无成交 —— 模拟盘 '+DATA.startDate+' 启动，首笔买入在下一交易日开盘执行</div>'
 
