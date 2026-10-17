@@ -127,6 +127,10 @@
   .planmsg{background:var(--panel);border:1px dashed var(--line);border-radius:9px;padding:14px;color:var(--tx2);font-size:12.5px;line-height:1.7}
   /* 今日分时图卡片 */
   .mcharts{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px}
+  /* ★ 成交明细里的分时图要「伸展开」（2026-10-17 用户要求）：用更宽的列宽，
+     桌面端一行 2 张、每张约 650px；窄屏用 min() 兜底成 1 列，不溢出。 */
+  .mcharts.wide{grid-template-columns:repeat(auto-fit,minmax(min(460px,100%),1fr));gap:12px}
+  .mcharts.wide .mchart .mch{font-size:12.5px}
   .mchart{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:8px 9px 4px}
   .mchart .mch{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;margin-bottom:5px;padding:0 2px}
   .mchart .mch .mcn{font-weight:600}
@@ -813,7 +817,9 @@ function minuteChartSVG(rec, tag, name, lbc, marks, opts){
   g += '<path d="'+ppath+'" fill="none" stroke="'+colOf(last.c)+'" stroke-width="'+(big?1.8:1.6)+'" stroke-linejoin="round"/>'
   g += '<circle cx="'+xOf(last.t).toFixed(1)+'" cy="'+Y(last.c).toFixed(1)+'" r="'+(big?3:2.6)+'" fill="'+colOf(last.c)+'"/>'
 
-  /* ★ B/S 标记：实心点 + 竖虚线到时间轴 + 时间/价格标签框 */
+  /* ★ B/S 标记：实心点 + 竖虚线对齐时间轴 + 一个小字母。
+     2026-10-17 按用户要求去掉「时间 + 价格」文字框：点的水平位置就是成交时间、
+     垂直位置就是成交价，图上已经完整表达了这两件事，再写一遍只是噪音。 */
   ;(marks||[]).forEach(function(mk){
     if(mk.p == null) return
     var tm = mk.t || (mk.k==='B' ? '09:30' : '14:57')
@@ -822,19 +828,11 @@ function minuteChartSVG(rec, tag, name, lbc, marks, opts){
     var mc = isBuy ? '#4aa3f0' : '#f0a04a'
     /* 竖虚线：从成交点落到时间轴，直观看出「几点成交」 */
     g += '<line x1="'+mx.toFixed(1)+'" y1="'+my.toFixed(1)+'" x2="'+mx.toFixed(1)+'" y2="'+(H-padB+2).toFixed(1)+'" stroke="'+mc+'" stroke-width="1" stroke-dasharray="2 3" opacity=".45"/>'
-    g += '<circle cx="'+mx.toFixed(1)+'" cy="'+my.toFixed(1)+'" r="'+(big?4.2:3.3)+'" fill="'+mc+'" stroke="#0e1420" stroke-width="1.4"/>'
-    /* 标签框：时间 + 价格 */
-    var txt1 = mk.k + ' ' + tm
-    var txt2 = mk.p.toFixed(2)
-    var lw = big ? 62 : 48, lh = big ? 27 : 23
-    var lx = mx - lw/2, ly = isBuy ? (my - lh - 9) : (my + 9)
-    if(ly < padT) ly = my + 9
-    if(ly + lh > padT + priceH) ly = my - lh - 9
-    if(lx < padL) lx = padL
-    if(lx + lw > W - padR) lx = W - padR - lw
-    g += '<rect x="'+lx.toFixed(1)+'" y="'+ly.toFixed(1)+'" width="'+lw+'" height="'+lh+'" rx="4" fill="#0e1420" stroke="'+mc+'" stroke-width="1" opacity=".96"/>'
-    g += '<text x="'+(lx+lw/2).toFixed(1)+'" y="'+(ly+(big?11:9.5)).toFixed(1)+'" fill="'+mc+'" font-size="'+(fs-0.3)+'" font-weight="700" text-anchor="middle">'+txt1+'</text>'
-    g += '<text x="'+(lx+lw/2).toFixed(1)+'" y="'+(ly+(big?22:18.5)).toFixed(1)+'" fill="#dfe6f3" font-size="'+(fs-0.5)+'" text-anchor="middle">'+txt2+'</text>'
+    g += '<circle cx="'+mx.toFixed(1)+'" cy="'+my.toFixed(1)+'" r="'+(big?4.6:3.8)+'" fill="'+mc+'" stroke="#0e1420" stroke-width="1.4"/>'
+    /* 只留一个字母（B/S），标在点上方，避免与价格线重叠 */
+    var ly = my - (big?9:7.5)
+    if(ly < padT + 4) ly = my + (big?15:12)
+    g += '<text x="'+mx.toFixed(1)+'" y="'+ly.toFixed(1)+'" fill="'+mc+'" font-size="'+(big?11:9.5)+'" font-weight="700" text-anchor="middle">'+mk.k+'</text>'
   })
 
   /* 右上角：当前价 + 涨跌幅 */
@@ -1009,7 +1007,7 @@ function tradeChartsHTML(evs){
     if(out.length > n0){ e._charted = 1 }
   })
   if(!out.length) return ''
-  return '<div class="mcharts">'+out.join('')+'</div>'
+  return '<div class="mcharts wide">'+out.join('')+'</div>'
 }
 
 /* ---------- 盘中实时面板（顶部，只显当前选中策略） ---------- */
