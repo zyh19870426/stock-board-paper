@@ -358,9 +358,13 @@ function renderSide(){
   var box = document.getElementById('sidelist')
   box.innerHTML = S.map(function(s){
     var c = colorOf(s.id)
-    return '<div class="sitem'+(s.id===CUR?' on':'')+'" data-id="'+s.id+'">'
+    var isMain = !s.isRef
+    var badge = isMain
+      ? '<span class="tag b" style="font-size:10px;padding:0 5px;margin-right:5px">主策略</span>'
+      : '<span class="tag sk" style="font-size:10px;padding:0 5px;margin-right:5px">对照</span>'
+    return '<div class="sitem'+(s.id===CUR?' on':'')+'" data-id="'+s.id+'"'+(isMain?'':' style="opacity:.62"')+'>'
       + '<span class="dot" style="background:'+c+'"></span>'
-      + '<span class="nm"><span class="n1">'+s.id+' · '+shortName(s)+'</span>'
+      + '<span class="nm"><span class="n1">'+badge+s.id+' · '+shortName(s)+'</span>'
       + '<span class="n2">'+sideSub(s)+'</span></span>'
       + '<span class="rt"><span class="rv '+cls(s.cumRet)+'">'+pct(s.cumRet)+'</span>'
       + '<span class="rd '+cls(s.dayRet)+'">今日 '+pct(s.dayRet)+'</span></span>'
@@ -420,7 +424,9 @@ function renderDetail(){
   var s = stratById(CUR)
   if(!s){ document.getElementById('detail').innerHTML=''; return }
   var c = colorOf(s.id)
-  var h = '<div class="stitle" style="border-color:'+c+'">'+s.id+' · '+s.name+' 详情<small>'+esc(s.brief)+'</small></div>'
+  var h = '<div class="stitle" style="border-color:'+c+'">'+s.id+' · '+s.name+' 详情'
+    + (s.isRef ? '<span class="tag sk" style="font-size:10px;padding:0 5px;margin-left:6px">对照组 · 不作为操作依据</span>' : '<span class="tag b" style="font-size:10px;padding:0 5px;margin-left:6px">主策略</span>')
+    + '<small>'+esc(s.brief)+'</small></div>'
 
   /* M2 专属：今日跟随谁 + 依据（切换轨迹折叠在卡片内）
      ★ 「方向成立」等滚动验证状态已弱化为这个小卡片里的一个徽章（顶部整条已撤）。 */
@@ -808,7 +814,8 @@ function render(d){
   DATA = d
   var S = mergedStrategies()
   if(!S.length) return
-  if(!stratById(CUR)) CUR = S[0].id        // 默认 M2（results[0] 恒为 M2）
+  /* ★ 默认选中「主策略」（S3，由 sim.js 置顶）；其余策略标 isRef，仅作对照 */
+  if(!stratById(CUR)) CUR = (DATA.mainId && stratById(DATA.mainId)) ? DATA.mainId : S[0].id
   renderSide()
   renderHero()
   renderLive()

@@ -448,10 +448,12 @@ async function main () {
     fs.writeFileSync(path.join(DATA, 'dashboard.json'), JSON.stringify({
       updated: new Date().toISOString(), date,
       startDate: cfg.startDate, initialCash: cfg.initialCash,
+      mainId: computed.mainId || cfg.mainStrategy || 'S3',   // ★ 主策略（置顶 + 页面默认选中）
       replayStart: computed.replayStart || undefined,
       rolling: rolling || undefined,
       strategies: results.map(r => ({
         id: r.id, name: r.name,
+        isRef: !!r.isRef,                  // ★ 非主策略 = 对照组（看板弱化显示）
         brief: r.m2 ? SIM.M2_BRIEF : briefOf(r.params),
         slots: r.params.slots,
         risk: r.risk || undefined,        // ★ 风控状态 + 止损/回撤线（人为跟随用）

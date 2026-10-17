@@ -11,6 +11,7 @@
   },
   "startDate": "2026-10-14",
   "initialCash": 100000,
+  "mainStrategy": "S3",
   "strategies": [
     {
       "id": "S1",
