@@ -131,6 +131,18 @@
   .mchart .mclg{display:flex;gap:12px;font-size:10.5px;color:var(--tx2);padding:2px 2px 4px}
   .mchart .mclg span{display:inline-flex;align-items:center;gap:4px}
   .mchart .mclg i{display:inline-block;width:8px;height:8px;border-radius:50%}
+  /* 成交明细 · B/S 时点条（不依赖分钟数据，全部历史可用） */
+  .tt-cell{display:flex;align-items:center;gap:6px;justify-content:flex-end}
+  .tt-cell .ttt{font-size:10.5px;font-variant-numeric:tabular-nums;letter-spacing:.2px}
+  .tt-cell .ttn{font-size:10px;color:var(--tx2);opacity:.75}
+  .tt-cell svg{display:block;flex:0 0 auto}
+  tr.trow.mcx{cursor:pointer}
+  tr.trow.mcx:hover td{background:rgba(120,140,180,.07)}
+  tr.trow.mcx td:first-child::after{content:'▸';color:var(--tx2);font-size:9px;margin-left:4px}
+  tr.trow.mcx.open td:first-child::after{content:'▾'}
+  tr.mcexp>td{padding:0!important;background:var(--panel2)}
+  tr.mcexp .mchart{margin:8px 10px}
+  tr.mcexp .mchint{padding:10px 12px;color:var(--tx2);font-size:11.5px}
   .foot{margin-top:24px;color:var(--tx2);font-size:11px;line-height:1.7}
   .foot b{color:var(--tx)}
 
@@ -554,25 +566,31 @@ function renderDetail(){
   h += '<div class="stitle" style="border-color:'+c+';font-size:13px">成交明细'+(s.live?'（⚡实时）':'')+'</div>'
   var evs = []
   ;(s.trades||[]).forEach(function(t){
-    evs.push({d:t.buyDate, ty:'买入', code:t.code, name:t.name, lbc:t.lbc, sh:t.shares, p:t.buyC, tag:'b'})
+    evs.push({d:t.buyDate, ty:'买入', code:t.code, name:t.name, lbc:t.lbc, sh:t.shares, p:t.buyC, tag:'b', tm:'09:30'})
     evs.push({d:t.sellDate, ty:'卖出', code:t.code, name:t.name, lbc:t.lbc, sh:t.shares, p:t.sellC,
-      pnl:t.pnlC, pp:t.pnlPct, reason:t.reason, tag:'s'})
+      pnl:t.pnlC, pp:t.pnlPct, reason:t.reason, tag:'s', tm:sellTimeOf(t)})
   })
-  ;(s.positions||[]).forEach(function(p){ evs.push({d:p.buyDate, ty:'买入', code:p.code, name:p.name, lbc:p.lbc, sh:p.shares, p:p.buyC, tag:'b', open:'持仓中'}) })
+  ;(s.positions||[]).forEach(function(p){ evs.push({d:p.buyDate, ty:'买入', code:p.code, name:p.name, lbc:p.lbc, sh:p.shares, p:p.buyC, tag:'b', tm:'09:30', open:'持仓中'}) })
   evs.sort(function(a,b){ return a.d===b.d ? (a.ty<b.ty?-1:1) : (a.d<b.d?1:-1) })
   h += evs.length
     /* ★ 2026-10-17：按用户要求瘦身为 6 列 —— 去掉「代码 / 板数 / 备注」。
        理由：人工跟随只需要「哪天、买卖、哪只票、多少钱、多少股、赚亏多少」；
        代码与连板数在「明日买入计划」「今日持仓」里已有，备注（卖出原因）单列一列会把表撑得很宽。
-       ★ 手机端仍走 data-l 卡片布局，6 列在窄屏一行一张卡，宽度天然对齐。 */
-    ? '<table class="tbl-trades"><colgroup><col style="width:14%"><col style="width:12%"><col class="cname" style="width:26%"><col style="width:16%"><col style="width:14%"><col style="width:18%"></colgroup>'
-      + '<tr class="thead"><th class="l">日期</th><th class="l">操作</th><th class="l">名称</th><th>价格</th><th>股数</th><th>盈亏</th></tr>'
-      + evs.map(function(e){
+       ★ 手机端仍走 data-l 卡片布局，6 列在窄屏一行一张卡，宽度天然对齐。
+       ★ 2026-10-17 17:xx：再加一列「时点」——B 固定 09:30 开盘、S 按离场方式取 14:57/15:00，
+         画成 0–240 分钟的交易时段条；该票该日有分钟数据时，整行可点开看真分时（B/S 单点标记）。 */
+    ? '<table class="tbl-trades"><colgroup><col style="width:13%"><col style="width:11%"><col class="cname" style="width:23%"><col style="width:15%"><col style="width:12%"><col style="width:16%"><col style="width:10%"></colgroup>'
+      + '<tr class="thead"><th class="l">日期</th><th class="l">操作</th><th class="l">名称</th><th>价格</th><th>股数</th><th>盈亏</th><th class="r">时点</th></tr>'
+      + evs.map(function(e, i){
           var pnl = e.tag==='s' ? '<span class="'+cls(e.pnl)+'">'+signYuan(e.pnl)+'（'+pct(e.pp)+'）</span>' : (e.open?'<span class="tag sk">'+e.open+'</span>':'')
+          var has = hasSeries(e.code, e.d)
+          var cell = timeCell(e, has)
           /* ★ data-l 供窄屏卡片布局当字段名 */
-          return '<tr><td class="l" data-l="日期">'+e.d+'</td><td class="l" data-l="操作"><span class="tag '+e.tag+'">'+e.ty+'</span></td>'
+          return '<tr class="trow'+(has?' mcx':'')+'" data-i="'+i+'" data-code="'+e.code+'" data-date="'+e.d+'" data-k="'+(e.tag==='b'?'B':'S')+'" data-p="'+e.p+'" data-tm="'+(e.tm||'')+'" data-name="'+esc(e.name)+'" data-lbc="'+(e.lbc==null?'':e.lbc)+'">'
+            +'<td class="l" data-l="日期">'+e.d+'</td><td class="l" data-l="操作"><span class="tag '+e.tag+'">'+e.ty+'</span></td>'
             +'<td class="l" data-l="名称">'+e.name+'</td>'
-            +'<td data-l="价格">'+price(e.p)+'</td><td data-l="股数">'+e.sh+'</td><td data-l="盈亏">'+pnl+'</td></tr>'
+            +'<td data-l="价格">'+price(e.p)+'</td><td data-l="股数">'+e.sh+'</td><td data-l="盈亏">'+pnl+'</td>'
+            +'<td class="r" data-l="时点">'+cell+'</td></tr>'
         }).join('') + '</table>'
     : '<div class="empty">暂无成交 —— 模拟盘 '+DATA.startDate+' 启动，首笔买入在下一交易日开盘执行</div>'
 
@@ -588,11 +606,51 @@ function renderDetail(){
  *   · 09:35 起画（5 分钟粒度），横轴标 09:35 / 11:30 / 14:00 / 15:00 附近刻度；
  *   · ★ 叠「买卖点」标记：B（买，红实心）/ S（卖，绿实心），价按实际成交价贴到对应 bar 上。
  */
-function seriesOf(code){
+/* ================= 成交明细 · B/S 时点条 =================
+ * 为什么（2026-10-17 用户要求）：
+ *   成交明细只有「价格/股数/盈亏」，看不出这笔单子落在当日分时的什么位置。
+ *   策略是固定规则：买入 = T+1 开盘 09:30；卖出 = 断板 14:57 尾盘集合竞价 / 到期 15:00 收盘。
+ *   ⇒ 不需要分钟数据也能画出「时点位置」（全历史可用）。
+ *   ⇒ 该票该日若在 minute-chart.json 里（最近 8 个交易日），整行可点开看真分时并标 B/S。
+ */
+function sellTimeOf(t){
+  var r = String(t && t.reason || '')
+  if(/退市|数据终止/.test(r)) return null          /* 强平价不可定时刻 */
+  if(/最大持有|到期/.test(r)) return '15:00'        /* 收盘价到期 */
+  return '14:57'                                   /* 断板 → 尾盘集合竞价 */
+}
+/* 09:30→0，11:30/13:00→120（午休折叠），15:00→240（单位：交易分钟） */
+function tMin(hhmm){
+  var m = String(hhmm||'').match(/(\d{1,2}):(\d{2})/)
+  if(!m) return null
+  var v = +m[1]*60 + +m[2]
+  if(v <= 9*60+30) return 0
+  if(v <= 11*60+30) return v - (9*60+30)
+  if(v < 13*60) return 120
+  if(v >= 15*60) return 240
+  return 120 + (v - 13*60)
+}
+function timeCell(e, clickable){
+  if(!e.tm) return '<span class="ttn" title="退市/数据终止强平，无固定成交时刻">—</span>'
+  var p = Math.max(0, Math.min(240, tMin(e.tm) || 0)) / 240 * 100
+  var x = (3 + p/100*54).toFixed(1)
+  var col = e.tag==='b' ? 'var(--s1)' : 'var(--s2)'
+  var svg = '<svg viewBox="0 0 60 12" width="60" height="12" aria-hidden="true">'
+    + '<line x1="3" y1="6" x2="57" y2="6" stroke="var(--line)" stroke-width="3" stroke-linecap="round"/>'
+    + '<line x1="30" y1="3" x2="30" y2="9" stroke="var(--panel2)" stroke-width="2"/>'
+    + '<circle cx="'+x+'" cy="6" r="3.4" fill="'+col+'" stroke="var(--panel)" stroke-width="1"/>'
+    + '</svg>'
+  return '<span class="tt-cell" title="'+esc(e.ty+' '+e.tm)+'（'+esc(e.reason||'')+'）'+(clickable?'　点击看当日分时':'')+'">'
+    + svg + '<span class="ttt" style="color:'+col+'">'+(e.tag==='b'?'B':'S')+' '+e.tm+'</span></span>'
+}
+function hasSeries(code, date){ return !!seriesOf(code, date) }
+
+function seriesOf(code, date){
   if(!MCHART || !MCHART.rows) return null
   var best = null
   MCHART.rows.forEach(function(r){
     if(r.code!==code) return
+    if(date && String(r.date)!==String(date)) return
     if(!best || String(r.date) > String(best.date)) best = r
   })
   if(!best || !best.bars || best.bars.length<2) return null
@@ -709,7 +767,7 @@ function minuteChartSVG(rec, tag, name, lbc, marks){
   }
   return '<div class="mchart">'
     + '<div class="mch">'
-    +   '<span class="tag '+(tag==='今日买入'?'b':(tag==='今日卖出'?'s':'sk'))+'">'+tag+'</span>'
+    +   '<span class="tag '+((tag==='今日买入'||tag==='买入')?'b':((tag==='今日卖出'||tag==='卖出')?'s':'sk'))+'">'+tag+'</span>'
     +   '<span class="mcn">'+esc(name||rec.name||'')+'</span>'
     +   '<span class="mcc">'+esc(rec.code)+'</span>'
     +   (lbc!=null?'<span class="mcl">'+lbc+' 板</span>':'')
@@ -749,6 +807,33 @@ function minuteChartsHTML(codes, buys, sells){
   })
   if(!out.length) return ''
   return '<div class="mcharts">'+out.join('')+'</div>'
+}
+
+/* ★ 成交明细：点行展开「该票该日」的真实分时，并把本行的 B 或 S 标到对应 bar 上。
+ *   只有该 (code,date) 在 minute-chart.json 里（最近 8 个交易日）时才可展开；
+ *   历史更早的成交没有分钟数据，改由「时点条」表达位置（B 09:30 / S 14:57 或 15:00）。 */
+function toggleMinuteRow(tr){
+  var next = tr.nextElementSibling
+  if(next && next.classList.contains('mcexp')){
+    next.parentNode.removeChild(next); tr.classList.remove('open'); return
+  }
+  var code = tr.getAttribute('data-code'), date = tr.getAttribute('data-date')
+  var rec = seriesOf(code, date)
+  if(!rec) return
+  var k = tr.getAttribute('data-k') || 'B'
+  var p = parseFloat(tr.getAttribute('data-p')) / 100
+  var nm = tr.getAttribute('data-name') || ''
+  var lb = tr.getAttribute('data-lbc')
+  var tm = tr.getAttribute('data-tm') || (k==='B' ? '09:30' : '14:57')
+  var idx = barIdxByTime(rec.bars, toBarKey(tm), k==='B' ? 0 : rec.bars.length-1)
+  var html = minuteChartSVG(rec, k==='B' ? '买入' : '卖出', nm, lb===''?null:+lb,
+    [{ k:k, p:p, i:idx }])
+  var row = document.createElement('tr')
+  row.className = 'mcexp'
+  row.innerHTML = '<td colspan="7">'+html
+    + '<div class="mchint">成交时点 '+tm+'　·　价格 '+p.toFixed(2)+'　·　该图 = '+rec.date+' 当日 5 分钟分时（'+rec.bars.length+' 根）</div></td>'
+  tr.parentNode.insertBefore(row, tr.nextSibling)
+  tr.classList.add('open')
 }
 
 /* ---------- 盘中实时面板（顶部，只显当前选中策略） ---------- */
@@ -964,6 +1049,12 @@ document.getElementById('menubtn').onclick = function(){ sideIsOpen() ? closeSid
 document.getElementById('scrim').onclick = closeSide
 document.getElementById('sideclose').onclick = closeSide
 document.addEventListener('keydown', function(e){ if(e.key === 'Escape' && sideIsOpen()) closeSide() })
+
+/* ★ 成交明细行：点开该笔的分时（带 B/S 点位） */
+document.addEventListener('click', function(ev){
+  var tr = ev.target && ev.target.closest ? ev.target.closest('#detail tr.trow.mcx') : null
+  if(tr) toggleMinuteRow(tr)
+})
 
 loadLive()
 loadMinuteChart()
