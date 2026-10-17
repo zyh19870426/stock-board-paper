@@ -60,7 +60,7 @@
         "minLbc": 0,
         "maxLbc": 2,
         "stopLossPct": 20,
-        "trailPct": 20,
+        "trailPct": 25,
         "exitMode": "break",
         "maxHoldDays": 10,
         "sortBy": "amtRatio",
@@ -72,7 +72,7 @@
         "topOnly": false,
         "boardFilter": "main",
         "delistExit": true,
-        "gateYz": { "q": 0.7, "win": 250 },
+        "gateYz": { "q": 0.8, "win": 250 },
         "ddStop": { "ddPct": 0.35, "pauseDays": 60 }
       }
     },
