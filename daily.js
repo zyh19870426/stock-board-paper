@@ -415,6 +415,16 @@ async function main () {
       console.log('  分时图采集：+' + minuteChart.added + ' 只（库内共 ' + minuteChart.total + ' 条）' +
         (minuteChart.failed.length ? '，失败 ' + minuteChart.failed.length + ' 只' : ''))
     } catch (e) { console.log('  ⚠️ 分时图采集失败（不影响主流程）：' + e.message) }
+    /* ★ 成交明细专用分时回填（2026-10-17）：
+     *   成交明细里每一笔都要能点开看「买入日 / 卖出日」的当日分时 + B/S 点位与时间。
+     *   做法：把各策略已平仓交易的 (code, buyDate, sellDate) 全收集，按票回填近 20 个交易日。
+     *   幂等（code@date 去重），所以每天跑都安全。 */
+    try {
+      const allTrades = []
+      results.forEach(r => (r.trades || []).forEach(t => allTrades.push(t)))
+      const mt = await MC.collectTrades(path.join(DATA, 'minute-trade.json'), allTrades, { budgetMs: 120 * 1000 })
+      if (mt.added) console.log('  成交分时回填：+' + mt.added + ' 条（库内共 ' + mt.total + ' 条，' + mt.codes + ' 只票）')
+    } catch (e) { console.log('  ⚠️ 成交分时回填失败（不影响主流程）：' + e.message) }
   }
 
   const meta = {

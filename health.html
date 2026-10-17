@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S3 体检 · 2026-10-16</title>
+<style>
+  :root{--bg:#0e1420;--panel:#161e2e;--panel2:#1b2438;--line:#2a3550;--tx:#dfe6f3;--tx2:#8fa0bf;--tx3:#6b7c9b;
+        --up:#f04a4a;--dn:#2fbf71;--accent:#4aa3f0;--green:#3ddc97;--amber:#f0a04a;--red:#f04a4a}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--tx);font:14px/1.65 "Segoe UI","Microsoft YaHei",sans-serif;padding:16px 16px 60px}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1240px;margin:0 auto}
+  .top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--tx2);margin-bottom:12px}
+  .top a{border:1px solid var(--line);border-radius:6px;padding:3px 10px}
+  .top a:hover{border-color:var(--accent);color:var(--accent)}
+  .top .on{border-color:var(--accent);color:var(--accent)}
+
+  .hero{background:var(--panel);border:1px solid var(--line);border-left:4px solid #3ddc97;border-radius:12px;padding:16px 18px;margin-bottom:14px}
+  .hero .h1{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .led{width:11px;height:11px;border-radius:50%;background:#3ddc97;box-shadow:0 0 0 4px #3ddc9722}
+  .hero h1{font-size:19px;font-weight:700}
+  .hero .dt{color:var(--tx2);font-size:12px}
+  .hero .say{margin-top:9px;font-size:13.5px;color:var(--tx)}
+  .hero .say b{color:#3ddc97}
+  .hero .meta{margin-top:8px;font-size:11.5px;color:var(--tx3)}
+
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .kpi .k{font-size:11.5px;color:var(--tx2)}
+  .kpi .v{font-size:22px;font-weight:700;margin-top:2px;letter-spacing:-.5px}
+  .kpi .s{font-size:11px;color:var(--tx3);margin-top:2px}
+  .up{color:var(--up)} .dn{color:var(--dn)} .muted{color:var(--tx3)}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:14px}
+  .card h2{font-size:13.5px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+  .card h2 .sub{font-size:11px;font-weight:400;color:var(--tx3)}
+
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+  th{color:var(--tx2);font-weight:600;font-size:11.5px}
+  tr:last-child td{border-bottom:0}
+  td.nm{min-width:120px}
+  td.v{font-variant-numeric:tabular-nums;white-space:nowrap}
+  td.std{color:var(--tx3);font-size:11.5px}
+  tr.hint td{font-size:11.5px;color:var(--tx3);padding-top:0;border-bottom:1px solid var(--line)}
+  .tag{display:inline-block;font-size:10.5px;padding:1px 7px;border-radius:5px;white-space:nowrap}
+  .tag.green{background:#12331f;color:var(--green);border:1px solid #1e5c3a}
+  .tag.amber{background:#33260f;color:var(--amber);border:1px solid #6b4a17}
+  .tag.red{background:#3a1717;color:var(--red);border:1px solid #7a2b2b}
+  .tag.gray{background:#1e2638;color:var(--tx3);border:1px solid var(--line)}
+
+  .chart{width:100%;height:250px;display:block}
+  .lg{display:flex;gap:16px;font-size:11.5px;color:var(--tx2);margin-top:6px}
+  .lg i{display:inline-block;width:16px;height:2px;vertical-align:middle;margin-right:5px}
+
+  .lb{display:grid;grid-template-columns:170px 1fr 84px;gap:10px;align-items:center;margin-bottom:7px}
+  .lbn{font-size:12px}
+  .lbs{display:block;font-size:10.5px;color:var(--tx3)}
+  .lbt{height:9px;background:var(--panel2);border-radius:5px;overflow:hidden}
+  .lbt i{display:block;height:100%;border-radius:5px}
+  .lbt i.up{background:linear-gradient(90deg,#8f2c2c,#f04a4a)}
+  .lbt i.dn{background:linear-gradient(90deg,#1d6b45,#2fbf71)}
+  .lbv{text-align:right;font-size:12px;font-variant-numeric:tabular-nums}
+
+  .pbar{position:relative;height:7px;background:var(--panel2);border-radius:4px;width:150px;display:inline-block;vertical-align:middle}
+  .pbar i{display:block;height:100%;background:linear-gradient(90deg,#2b3a57,#4aa3f0);border-radius:4px}
+  .pbar b{position:absolute;top:-2px;width:2px;height:11px;background:#dfe6f3}
+  .pv{font-size:10.5px;color:var(--tx3);margin-left:8px}
+
+  .act{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+  .act:last-child{border-bottom:0}
+  .act .pri{flex:0 0 auto;font-size:10.5px;font-weight:700;border-radius:5px;padding:1px 7px;height:20px;line-height:18px}
+  .pri.red{background:#3a1717;color:#ff8080;border:1px solid #7a2b2b}
+  .pri.amber{background:#33260f;color:#ffc06a;border:1px solid #6b4a17}
+  .pri.blue{background:#12293f;color:#7cc0ff;border:1px solid #24547f}
+  .act b{font-size:12.5px}
+  .act p{font-size:12px;color:var(--tx2);margin-top:2px}
+  .act code,.cmd code{background:#0b111c;border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:11.5px;color:#9fd0ff}
+
+  ul.notes{list-style:none;font-size:12.5px;color:var(--tx2)}
+  ul.notes li{padding:5px 0 5px 16px;position:relative}
+  ul.notes li:before{content:"·";position:absolute;left:4px;color:var(--accent)}
+
+  .cmd{background:#0b111c;border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-family:Consolas,monospace;font-size:11.5px;color:#9fd0ff;line-height:1.9;overflow:auto}
+  .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .foot{color:var(--tx3);font-size:11px;line-height:1.7;margin-top:6px}
+  @media(max-width:860px){
+    .kpis{grid-template-columns:1fr 1fr}
+    .two{grid-template-columns:1fr}
+    .lb{grid-template-columns:110px 1fr 72px}
+    .pbar{width:88px}
+    table{font-size:11.5px}
+    th,td{padding:6px 5px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top">
+    <a href="./">← 每日收益看板</a>
+    <a href="./backtest.html">策略回测</a>
+    <a href="./plan.html">改版方案</a>
+    <a class="on" href="./health.html">S3 体检</a>
+  </div>
+
+  <div class="hero">
+    <div class="h1"><span class="led"></span><h1>S3 定期体检 · 正常</h1>
+      <span class="dt">数据截至 2026-10-16</span></div>
+    <div class="say">所有检验项均在方案基线内，<b>不需要任何动作</b>。S3 的收益由右尾驱动，正常波动不应触发调参。</div>
+    <div class="meta">连续第 2 次「正常」 ｜ 体检时间 2026/10/17 17:57:29 ｜ 数据 2020-03-11 → 2026-10-16（1600 个交易日）</div>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi"><div class="k">近 20 日 单笔均值</div>
+      <div class="v dn">-0.65%</div>
+      <div class="s">13 笔 · t=-0.30 · 全样本 1.02%</div></div>
+    <div class="kpi"><div class="k">近 60 日 单笔均值</div>
+      <div class="v up">2.29%</div>
+      <div class="s">43 笔 · t=1.07 · 区间收益 58.71%</div></div>
+    <div class="kpi"><div class="k">当前回撤（距峰值）</div>
+      <div class="v">8.41%</div>
+      <div class="s">峰值 2026-08-12 · 历史最大 44.0% · 熔断线 35%</div></div>
+    <div class="kpi"><div class="k">近 60 日 连板率</div>
+      <div class="v">14.0%</div>
+      <div class="s">全样本 14.5% · 右尾是否还在</div></div>
+  </div>
+
+  <div class="card">
+    <h2>判定明细 <span class="sub">红线 0 · 观察 0 · 正常 9</span></h2>
+    <table>
+      <tr><th style="width:74px">结果</th><th>检验项</th><th>实测</th><th>标准</th></tr>
+      <tr><td><span class="tag green">正常</span></td><td class="nm">数据集新鲜度</td><td class="v">2026-10-16（落后 0 个工作日）</td><td class="std">≤ 3 工作日</td></tr><tr><td><span class="tag green">正常</span></td><td class="nm">线上数据同步</td><td class="v">看板 2026-10-16 / 本地 2026-10-16</td><td class="std">两者一致</td></tr><tr><td><span class="tag green">正常</span></td><td class="nm">参数是否符合方案基线</td><td class="v">完全一致</td><td class="std">与 v20261017 方案一致</td></tr><tr><td><span class="tag green">正常</span></td><td class="nm">当前回撤（距历史峰值）</td><td class="v">8.41%（峰值 2026-08-12）</td><td class="std">&lt; 25%</td></tr><tr><td><span class="tag green">正常</span></td><td class="nm">近 20 日单笔均值</td><td class="v">-0.65%（t=-0.30，13 笔 / 8 个开仓日）</td><td class="std">≥ 0 或 不显著（|t|&lt;1）</td></tr><tr><td><span class="tag green">正常</span></td><td class="nm">近 60 日单笔均值</td><td class="v">2.29%（t=1.07，43 笔）</td><td class="std">≥ 全样本的 50%（0.51%）</td></tr><tr><td><span class="tag green">正常</span></td><td class="nm">近 60 日连板率（买入后再封板）</td><td class="v">13.95%（全样本 14.53%）</td><td class="std">≥ 9%</td></tr><tr><td><span class="tag green">正常</span></td><td class="nm">大盘风格漂移（综合 z）</td><td class="v">0.25（涨停 -0.07 / 高度 -0.30 / 再封 -0.05 / 创业 -0.60）</td><td class="std">&lt; 1.5</td></tr><tr><td><span class="tag green">正常</span></td><td class="nm">当前风格档的历史期望单笔</td><td class="v">0.71%（最差维度）</td><td class="std">≥ 0</td></tr><tr><td><span class="tag gray">样本不足</span></td><td class="nm">实绩 vs 同期回放</td><td class="v">仅 2 笔 / 3 日</td><td class="std">≥ 20 笔且 ≥ 20 日</td></tr><tr class="hint"><td></td><td colspan="3">样本不足，不参与判定（这是统计纪律，不是漏检）</td></tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>绩效 <span class="sub">回放 = 当前参数在本地全历史上重算；实绩 = 线上模拟账户</span></h2>
+    <table>
+      <tr><th>区间</th><th>笔数</th><th>单笔均值</th><th>t</th><th>胜率</th><th>连板率</th><th>区间收益</th><th>最大回撤</th></tr>
+      <tr><td class="nm">全样本（2020-08-24 起）</td><td>1032</td>
+        <td class="up">1.02%</td><td>3.33</td>
+        <td>46.8%</td><td>14.5%</td>
+        <td class="up">5967.60%</td><td>44.0%</td></tr>
+      <tr><td class="nm">近 60 日</td><td>43</td>
+        <td class="up">2.29%</td><td>1.07</td>
+        <td>48.8%</td><td>14.0%</td>
+        <td class="up">58.71%</td><td>15.0%</td></tr>
+      <tr><td class="nm">近 20 日</td><td>13</td>
+        <td class="dn">-0.65%</td><td>-0.30</td>
+        <td>46.2%</td><td>23.1%</td>
+        <td class="dn">-1.07%</td><td>8.7%</td></tr>
+      <tr><td class="nm">线上实绩 <span class="tag gray">样本不足</span></td><td>2</td><td class="up">0.52%</td><td>—</td><td>50.0%</td><td>—</td><td class="up">0.47%</td><td>0.5%</td></tr>
+    </table>
+    <div class="foot">全样本年化 96.05%（6.10 年，复利）。近 20 日仅 8 个开仓日，其余被情绪闸门/熔断拦下。 实绩同期回放 -3.75%，实绩 0.47%，偏差 4.22%（样本 2 笔，不作结论）。</div>
+  </div>
+
+  <div class="card">
+    <h2>体检曲线 <span class="sub">历史上每天的 20/60 日单笔均值 —— 判断当前值是常态还是异常</span></h2>
+    <svg viewBox="0 0 1180 250" class="chart" preserveAspectRatio="none"><line x1="46" y1="224.0" x2="1168" y2="224.0" stroke="#233049" stroke-width="1"/><text x="40" y="228.0" fill="#7d8fae" font-size="10" text-anchor="end">-8.9%</text><line x1="46" y1="171.5" x2="1168" y2="171.5" stroke="#233049" stroke-width="1"/><text x="40" y="175.5" fill="#7d8fae" font-size="10" text-anchor="end">-1.1%</text><line x1="46" y1="119.0" x2="1168" y2="119.0" stroke="#233049" stroke-width="1"/><text x="40" y="123.0" fill="#7d8fae" font-size="10" text-anchor="end">6.8%</text><line x1="46" y1="66.5" x2="1168" y2="66.5" stroke="#233049" stroke-width="1"/><text x="40" y="70.5" fill="#7d8fae" font-size="10" text-anchor="end">14.7%</text><line x1="46" y1="14.0" x2="1168" y2="14.0" stroke="#233049" stroke-width="1"/><text x="40" y="18.0" fill="#7d8fae" font-size="10" text-anchor="end">22.6%</text><line x1="46" y1="164.5" x2="1168" y2="164.5" stroke="#4a5b7d" stroke-width="1" stroke-dasharray="4 3"/><path d="M46.0 161.1 L48.8 162.2 L51.5 162.5 L54.3 162.6 L57.0 168.0 L59.8 167.1 L62.5 165.5 L65.3 164.5 L68.0 163.1 L70.8 159.5 L73.5 161.5 L76.3 163.8 L79.0 166.1 L81.8 163.9 L84.5 167.4 L87.3 168.9 L90.0 170.4 L92.8 169.8 L95.5 169.3 L98.3 167.8 L101.0 173.3 L103.8 173.5 M112.0 150.4 L114.8 154.7 L117.5 151.6 L120.3 155.0 L123.0 153.8 L125.8 153.8 L128.5 156.3 L131.3 159.0 L134.0 158.5 L136.8 158.6 L139.5 158.0 L142.3 154.9 L145.0 154.3 L147.8 155.2 L150.5 152.7 L153.3 151.8 L156.0 152.3 L158.8 153.9 L161.5 154.1 L164.3 154.9 L167.0 158.5 L169.8 158.0 L172.5 159.3 L175.3 157.8 L178.0 161.4 L180.8 159.6 L183.5 158.8 L186.3 157.0 L189.0 157.3 L191.8 159.3 L194.5 158.4 L197.3 159.1 L200.0 161.1 L202.8 159.8 L205.5 162.8 L208.3 162.1 L211.0 161.9 L213.8 161.9 L216.5 162.1 L219.3 160.6 L222.0 157.7 L224.8 159.2 L227.5 159.3 L230.3 157.2 L233.0 153.8 L235.8 155.5 L238.5 150.8 L241.3 152.3 L244.0 151.9 L246.8 148.5 L249.5 149.1 L252.3 131.4 L255.0 129.7 L257.8 131.6 L260.5 129.4 L263.3 131.9 L266.0 135.9 L268.8 133.8 L271.5 132.1 L274.3 135.5 L277.0 136.6 L279.8 131.9 L282.5 132.3 L285.3 134.4 L288.0 132.1 L290.8 132.3 L293.5 142.1 L296.3 136.7 L299.0 140.7 L301.8 142.7 L304.5 145.4 L307.3 165.6 L310.0 161.1 L312.8 162.0 L315.5 159.2 L318.3 161.4 L321.0 156.5 L323.8 153.9 L326.5 153.0 L329.3 152.4 L332.0 151.6 L334.7 153.9 L337.5 153.5 L340.3 153.5 L343.0 155.7 L345.8 153.6 L348.5 149.4 L351.3 147.7 L354.0 143.5 L356.8 142.8 L359.5 140.1 L362.3 139.2 L365.0 144.6 L367.8 141.9 L370.5 140.9 L373.3 138.6 L376.0 138.4 L378.8 142.9 L381.5 147.5 L384.3 146.7 L387.0 145.5 L389.8 145.1 L392.5 144.7 L395.3 144.1 L398.0 143.9 L400.8 143.9 L403.5 140.3 L406.3 146.8 L409.0 149.5 L411.8 148.6 L414.5 149.8 L417.3 149.8 L420.0 144.7 L422.7 139.5 L425.5 144.2 L428.3 145.8 L431.0 149.4 L433.8 150.1 L436.5 146.4 L439.3 149.1 L442.0 149.5 L444.8 147.1 L447.5 147.3 L450.3 148.4 L453.0 150.9 L455.8 153.4 L458.5 161.1 L461.3 160.5 L464.0 157.2 L466.8 158.9 L469.5 160.3 L472.3 161.1 L475.0 165.7 L477.8 170.4 L480.5 172.8 L483.3 171.8 L486.0 170.3 L488.8 170.9 L491.5 172.1 L494.3 170.4 M502.5 161.7 L505.3 163.5 L508.0 160.7 L510.8 160.5 L513.5 163.7 L516.3 164.7 L519.0 161.8 L521.8 162.5 L524.5 162.7 L527.3 164.4 L530.0 165.7 L532.8 163.8 L535.5 165.4 L538.3 166.5 L541.0 165.6 L543.8 165.8 L546.5 165.8 L549.3 164.8 L552.0 162.5 L554.8 162.1 L557.5 162.2 L560.3 163.0 L563.0 157.6 L565.8 159.5 L568.5 158.4 L571.3 158.6 L574.0 161.3 L576.8 162.3 L579.5 161.9 L582.3 161.9 L585.0 163.3 L587.8 164.7 L590.5 163.5 L593.3 157.3 L596.0 158.7 L598.8 159.0 L601.5 159.7 L604.3 159.2 L607.0 166.3 L609.8 164.4 L612.5 164.8 L615.3 158.2 L618.0 165.2 L620.8 163.6 L623.5 162.3 L626.3 162.9 L629.0 162.5 L631.8 161.0 L634.5 157.8 L637.3 153.9 L640.0 151.1 L642.8 146.8 L645.5 147.0 L648.3 154.7 L651.0 151.9 L653.8 150.7 L656.5 151.2 L659.2 149.4 L662.0 140.9 L664.8 145.7 L667.5 152.4 L670.3 157.3 L673.0 155.4 L675.8 155.0 L678.5 158.9 L681.3 159.1 L684.0 156.5 L686.8 156.7 L689.5 157.4 L692.3 159.2 L695.0 158.8 L697.8 160.4 L700.5 159.7 L703.3 160.4 L706.0 166.5 L708.8 167.8 L711.5 166.9 L714.3 168.8 L717.0 173.6 L719.8 171.2 L722.5 165.4 M728.0 152.2 L730.8 152.2 L733.5 162.0 L736.3 169.7 L739.0 167.4 L741.8 166.9 L744.5 166.7 L747.3 165.5 L750.0 163.5 L752.8 163.0 L755.5 168.8 L758.3 166.7 L761.0 167.8 L763.7 161.9 L766.5 161.9 L769.3 165.9 L772.0 164.1 L774.8 165.3 L777.5 148.9 L780.3 150.6 L783.0 150.1 L785.8 151.3 L788.5 149.9 L791.3 147.3 L794.0 146.9 L796.8 147.5 L799.5 143.7 L802.3 141.7 L805.0 144.2 L807.8 146.3 L810.5 145.6 L813.3 149.7 L816.0 147.8 L818.8 154.4 L821.5 155.5 L824.3 150.1 L827.0 150.6 L829.8 149.5 L832.5 169.4 L835.3 171.9 L838.0 171.0 L840.8 170.7 L843.5 164.8 L846.3 164.6 L849.0 166.9 L851.8 167.0 L854.5 172.1 L857.3 175.3 L860.0 174.3 L862.8 173.8 L865.5 169.9 L868.3 168.7 L871.0 168.5 M879.3 168.4 L882.0 167.7 L884.8 164.8 L887.5 167.5 L890.3 165.9 L893.0 157.9 L895.8 158.6 L898.5 160.3 L901.3 162.8 L904.0 163.8 L906.8 164.0 L909.5 163.6 L912.3 160.2 L915.0 159.1 L917.8 154.8 L920.5 155.2 L923.3 155.3 L926.0 155.1 L928.8 153.3 L931.5 152.4 L934.3 152.8 L937.0 154.2 L939.7 156.6 L942.5 151.9 L945.3 152.1 L948.0 156.3 L950.8 156.4 L953.5 156.7 L956.3 155.0 L959.0 153.5 L961.8 151.6 L964.5 150.5 L967.3 153.3 L970.0 156.0 L972.8 161.3 L975.5 161.9 L978.3 162.0 L981.0 162.2 L983.8 162.6 L986.5 164.6 L989.3 164.8 L992.0 164.1 L994.8 162.8 L997.5 167.5 L1000.3 168.1 L1003.0 165.3 L1005.8 164.1 L1008.5 163.5 L1011.3 163.7 L1014.0 165.8 L1016.8 169.9 L1019.5 170.5 L1022.3 168.0 L1025.0 165.4 L1027.8 163.9 L1030.5 162.7 L1033.3 161.3 L1036.0 161.1 L1038.8 161.3 L1041.5 159.2 L1044.3 161.3 L1047.0 160.2 L1049.8 155.5 L1052.5 153.0 L1055.3 154.0 L1058.0 157.6 L1060.8 158.7 L1063.5 158.1 L1066.3 158.4 L1069.0 157.5 L1071.8 154.8 L1074.5 155.6 L1077.3 157.8 L1080.0 154.3 L1082.8 150.9 L1085.5 151.1 L1088.3 152.3 L1091.0 149.9 L1093.8 149.5 L1096.5 151.3 L1099.3 148.0 L1102.0 148.6 L1104.8 156.3 L1107.5 155.2 L1110.3 156.0 L1113.0 154.0 L1115.8 152.6 L1118.5 153.6 L1121.3 144.1 L1124.0 143.7 L1126.8 143.6 L1129.5 142.6 L1132.3 142.6 L1135.0 142.2 L1137.8 149.3 L1140.5 148.1 L1143.3 146.3 L1146.0 148.8 L1148.8 150.6 L1151.5 150.2 L1154.3 152.6 L1157.0 151.9 L1159.8 146.3 L1162.5 148.4 L1165.3 145.7 L1168.0 145.2" fill="none" stroke="#f0a04a" stroke-width="1.6" opacity=".85"/><path d="M46.0 153.0 L48.8 162.5 L51.5 162.3 L54.3 159.7 L57.0 155.7 L59.8 155.0 L62.5 160.4 L65.3 162.6 L68.0 160.3 L70.8 164.2 L73.5 170.8 L76.3 175.2 L79.0 179.2 L81.8 176.3 L84.5 179.4 L87.3 181.2 L90.0 184.1 L92.8 178.9 L95.5 176.6 L98.3 180.2 L101.0 187.3 L103.8 188.4 L106.5 146.0 L109.3 142.2 L112.0 150.4 L114.8 154.7 L117.5 151.6 L120.3 155.0 L123.0 155.9 L125.8 156.9 L128.5 162.7 L131.3 165.0 L134.0 165.4 L136.8 165.8 L139.5 161.6 L142.3 156.2 L145.0 150.2 L147.8 153.7 L150.5 144.0 L153.3 138.9 L156.0 135.6 L158.8 148.5 L161.5 152.0 L164.3 150.2 L167.0 161.6 L169.8 172.0 L172.5 172.3 L175.3 170.6 L178.0 176.4 L180.8 176.8 L183.5 172.3 L186.3 160.6 L189.0 158.9 L191.8 164.0 L194.5 159.8 L197.3 150.7 L200.0 162.1 L202.8 156.8 L205.5 160.3 L208.3 156.5 L211.0 152.9 L213.8 154.1 L216.5 158.3 L219.3 153.5 L222.0 154.7 L224.8 159.9 L227.5 163.8 L230.3 154.0 L233.0 151.1 L235.8 153.6 L238.5 141.5 L241.3 140.6 L244.0 125.7 L246.8 118.3 L249.5 129.1 L252.3 28.5 L255.0 49.7 L257.8 79.7 L260.5 72.6 L263.3 79.3 L266.0 113.3 L268.8 114.3 L271.5 166.6 L274.3 172.5 L277.0 174.7 L279.8 166.4 L282.5 167.2 L285.3 157.6 L288.0 154.8 L290.8 152.5 L293.5 157.7 L296.3 143.2 L299.0 156.5 L301.8 155.9 L304.5 161.4 L307.3 170.8 L310.0 150.0 L312.8 157.9 L315.5 156.9 L318.3 161.5 L321.0 154.4 L323.8 137.6 L326.5 131.4 L329.3 143.4 L332.0 143.3 L334.7 153.9 L337.5 147.6 L340.3 148.2 L343.0 157.9 L345.8 157.6 L348.5 150.6 L351.3 130.6 L354.0 127.0 L356.8 124.2 L359.5 126.2 L362.3 127.4 L365.0 133.1 L367.8 137.3 L370.5 143.2 L373.3 147.9 L376.0 138.6 L378.8 146.2 L381.5 154.0 L384.3 152.9 L387.0 163.3 L389.8 163.0 L392.5 166.1 L395.3 160.8 L398.0 159.9 L400.8 147.6 L403.5 133.3 L406.3 135.1 L409.0 140.0 L411.8 138.1 L414.5 145.4 L417.3 146.6 L420.0 131.4 L422.7 134.4 L425.5 124.3 L428.3 136.2 L431.0 146.0 L433.8 147.6 L436.5 156.5 L439.3 163.5 L442.0 182.1 L444.8 170.7 L447.5 166.7 L450.3 159.2 L453.0 162.7 L455.8 166.0 L458.5 166.6 L461.3 172.2 L464.0 167.3 L466.8 167.9 L469.5 175.5 L472.3 173.8 L475.0 171.3 L477.8 166.4 L480.5 178.6 L483.3 180.8 L486.0 180.5 L488.8 178.7 L491.5 181.4 L494.3 185.2 L497.0 152.1 L499.8 164.2 L502.5 161.7 L505.3 163.5 L508.0 160.7 L510.8 157.9 L513.5 163.4 L516.3 169.1 L519.0 161.1 L521.8 163.0 L524.5 161.6 L527.3 168.3 L530.0 171.1 L532.8 163.9 L535.5 167.4 L538.3 171.9 L541.0 170.3 L543.8 171.4 L546.5 168.7 L549.3 166.1 L552.0 154.5 L554.8 153.6 L557.5 149.4 L560.3 153.6 L563.0 131.0 L565.8 140.8 L568.5 145.0 L571.3 154.3 L574.0 159.1 L576.8 161.2 L579.5 158.9 L582.3 181.6 L585.0 182.0 L587.8 184.1 L590.5 178.4 L593.3 164.3 L596.0 161.5 L598.8 161.3 L601.5 157.9 L604.3 152.3 L607.0 159.5 L609.8 156.9 L612.5 169.7 L615.3 152.0 L618.0 151.3 L620.8 147.0 L623.5 135.5 L626.3 144.0 L629.0 150.0 L631.8 151.7 L634.5 158.0 L637.3 150.2 L640.0 156.5 L642.8 134.6 L645.5 138.4 L648.3 143.0 L651.0 135.5 L653.8 145.7 L656.5 155.5 L659.2 160.8 L662.0 144.9 L664.8 149.4 L667.5 166.9 L670.3 171.7 L673.0 165.4 L675.8 159.1 L678.5 171.3 L681.3 186.6 L684.0 167.8 L686.8 164.6 L689.5 158.1 L692.3 162.9 L695.0 158.6 L697.8 150.1 L700.5 142.8 L703.3 154.3 L706.0 165.9 L708.8 177.4 L711.5 175.0 L714.3 183.9 L717.0 196.8 L719.8 209.5 L722.5 202.2 L725.3 140.8 L728.0 152.2 L730.8 152.2 L733.5 162.0 L736.3 169.7 L739.0 174.3 L741.8 172.8 L744.5 182.6 L747.3 173.9 L750.0 166.6 L752.8 163.9 L755.5 168.0 L758.3 165.9 L761.0 168.7 L763.7 157.1 L766.5 155.6 L769.3 170.1 L772.0 162.1 L774.8 156.5 L777.5 88.0 L780.3 77.7 L783.0 103.5 L785.8 93.1 L788.5 108.8 L791.3 116.8 L794.0 110.0 L796.8 176.1 L799.5 161.3 L802.3 151.8 L805.0 157.6 L807.8 158.7 L810.5 176.6 L813.3 180.4 L816.0 195.5 L818.8 185.3 L821.5 185.5 L824.3 177.2 L827.0 172.9 L829.8 162.8 L832.5 158.3 L835.3 169.3 L838.0 166.5 L840.8 170.0 L843.5 155.1 L846.3 160.0 L849.0 165.3 L851.8 164.4 L854.5 164.3 L857.3 172.8 L860.0 191.2 L862.8 191.0 L865.5 194.7 L868.3 196.0 L871.0 194.6 L873.8 170.0 L876.5 169.7 L879.3 168.4 L882.0 167.7 L884.8 164.8 L887.5 167.5 L890.3 162.5 L893.0 153.9 L895.8 152.0 L898.5 154.4 L901.3 159.2 L904.0 160.8 L906.8 163.0 L909.5 160.8 L912.3 161.0 L915.0 159.9 L917.8 137.5 L920.5 138.4 L923.3 131.9 L926.0 136.8 L928.8 132.2 L931.5 141.6 L934.3 146.0 L937.0 161.7 L939.7 168.6 L942.5 159.8 L945.3 158.7 L948.0 160.3 L950.8 163.3 L953.5 164.2 L956.3 159.4 L959.0 154.6 L961.8 158.6 L964.5 155.1 L967.3 154.5 L970.0 158.1 L972.8 157.0 L975.5 162.3 L978.3 172.6 L981.0 170.5 L983.8 177.1 L986.5 177.3 L989.3 171.6 L992.0 171.5 L994.8 170.6 L997.5 172.8 L1000.3 176.5 L1003.0 168.4 L1005.8 162.4 L1008.5 163.7 L1011.3 159.5 L1014.0 159.4 L1016.8 163.1 L1019.5 161.1 L1022.3 166.6 L1025.0 162.1 L1027.8 158.4 L1030.5 159.4 L1033.3 147.3 L1036.0 143.6 L1038.8 146.1 L1041.5 151.0 L1044.3 160.7 L1047.0 162.6 L1049.8 148.2 L1052.5 150.9 L1055.3 154.1 L1058.0 157.7 L1060.8 153.2 L1063.5 154.3 L1066.3 154.5 L1069.0 166.2 L1071.8 166.0 L1074.5 161.8 L1077.3 161.5 L1080.0 149.3 L1082.8 139.8 L1085.5 139.0 L1088.3 136.1 L1091.0 125.9 L1093.8 130.0 L1096.5 134.5 L1099.3 147.6 L1102.0 153.1 L1104.8 163.8 L1107.5 159.7 L1110.3 175.9 L1113.0 168.9 L1115.8 165.7 L1118.5 172.9 L1121.3 139.7 L1124.0 138.5 L1126.8 133.8 L1129.5 125.9 L1132.3 125.7 L1135.0 102.7 L1137.8 122.5 L1140.5 148.6 L1143.3 143.6 L1146.0 143.1 L1148.8 151.1 L1151.5 166.3 L1154.3 164.8 L1157.0 161.7 L1159.8 163.1 L1162.5 171.4 L1165.3 166.0 L1168.0 163.1" fill="none" stroke="#4aa3f0" stroke-width="1.8"/><text x="46.0" y="242" fill="#7d8fae" font-size="10" text-anchor="middle">20-11</text><text x="326.5" y="242" fill="#7d8fae" font-size="10" text-anchor="middle">22-05</text><text x="607.0" y="242" fill="#7d8fae" font-size="10" text-anchor="middle">23-11</text><text x="887.5" y="242" fill="#7d8fae" font-size="10" text-anchor="middle">25-07</text><text x="1168.0" y="242" fill="#7d8fae" font-size="10" text-anchor="middle">26-10</text></svg>
+    <div class="lg"><span><i style="background:#4aa3f0"></i>滚动 20 日单笔均值</span><span><i style="background:#f0a04a"></i>滚动 60 日单笔均值</span><span class="muted">虚线 = 0</span></div>
+  </div>
+
+  <div class="two">
+    <div class="card">
+      <h2>收益结构 <span class="sub">按「持有期最高板」分档</span></h2>
+      <div class="lb"><div class="lbn">1 板（买入即断）<span class="lbs">882 笔 · 85.5%</span></div><div class="lbt"><i class="dn" style="width:2.0%"></i></div><div class="lbv dn">-0.83%</div></div><div class="lb"><div class="lbn">2 板<span class="lbs">93 笔 · 9.0%</span></div><div class="lbt"><i class="up" style="width:9.2%"></i></div><div class="lbv up">4.54%</div></div><div class="lb"><div class="lbn">3-4 板<span class="lbs">45 笔 · 4.4%</span></div><div class="lbt"><i class="up" style="width:34.9%"></i></div><div class="lbv up">17.25%</div></div><div class="lb"><div class="lbn">5 板+<span class="lbs">12 笔 · 1.2%</span></div><div class="lbt"><i class="up" style="width:100.0%"></i></div><div class="lbv up">49.40%</div></div>
+      <div class="foot">S3 买入时都是首板，利润来自买入后自己长上去的连板。1 板组（买入即断）平均小亏，是试错成本；5 板+ 只占 1.2% 却贡献主要收益。连板率塌陷 = 右尾断了，这是最该盯的指标。</div>
+    </div>
+
+    <div class="card">
+      <h2>大盘风格 <span class="sub">近 20 日 vs 全历史</span></h2>
+      <table>
+        <tr><th>维度</th><th>当前</th><th>历史分位</th><th>z</th><th>当前档历史期望单笔</th></tr>
+        <tr><td class="nm">涨停家数</td><td class="v">54.0 家</td><td><div class="pbar"><i style="width:56%"></i><b style="left:56%"></b></div><span class="pv">第 56 分位</span></td><td class="">-0.07</td><td><span class="up">1.07%</span> <span class="muted">/ 涨停中等 · n=337</span></td></tr><tr><td class="nm">最高板</td><td class="v">5.5 板</td><td><div class="pbar"><i style="width:49%"></i><b style="left:49%"></b></div><span class="pv">第 49 分位</span></td><td class="">-0.30</td><td><span class="up">1.06%</span> <span class="muted">/ 高度中等 · n=238</span></td></tr><tr><td class="nm">再封率</td><td class="v">22.4%</td><td><div class="pbar"><i style="width:54%"></i><b style="left:54%"></b></div><span class="pv">第 54 分位</span></td><td class="">-0.05</td><td><span class="up">1.16%</span> <span class="muted">/ 再封率高 · n=342</span></td></tr><tr><td class="nm">创业板涨停占比</td><td class="v">5.5%</td><td><div class="pbar"><i style="width:26%"></i><b style="left:26%"></b></div><span class="pv">第 26 分位</span></td><td class="">-0.60</td><td><span class="up">0.71%</span> <span class="muted">/ 创业板占比低 · n=347</span></td></tr>
+      </table>
+      <div class="foot">综合漂移 z = 0.25（阈值 1.5）。「当前档历史期望」= 与今天相似的市场环境下，历史上 S3 的单笔均值。若这一列为负，说明赚不到钱是环境不匹配，不是策略坏了。</div>
+    </div>
+  </div>
+
+  <div class="card"><h2>留意项 <span class="sub">不构成告警</span></h2><ul class="notes"><li>近 20 日单笔均值为负（-0.65%）但未达统计显著（t=-0.30），按纪律不平仓、不改参。</li><li>近 20 日只有 8 天开仓 —— 其余交易日被情绪闸门/回撤熔断拦下，属正常风控动作。</li><li>当前 20 日单笔均值处于历史第 18 分位（偏低区），属于会周期性出现的低谷。</li></ul></div>
+
+  <div class="card">
+    <h2>建议动作</h2>
+    <div class="act"><span class="pri blue">P3</span><div><b>维持现状</b><p>各项指标均在方案基线内。S3 不需要「优化」——它已经是最优档位（首板）+ 最稳健参数组合；频繁调参只会砍掉右尾。</p></div></div><div class="act"><span class="pri blue">P9</span><div><b>常规复核节奏</b><p>每交易日收盘后自动体检；每月第一个周六做深度复盘（样本外 + 参数邻域 + 风格分档）。无异常不做参数改动。</p></div></div>
+  </div>
+
+  <div class="card">
+    <h2>体检标准 <span class="sub">阈值写死在 s3-health.js 顶部，改这里就是改纪律</span></h2>
+    <table>
+      <tr><th>层级</th><th>指标</th><th>观察（黄）</th><th>红线（红）</th></tr>
+      <tr><td>数据</td><td>数据集落后工作日</td><td>&gt; 3</td><td>&gt; 8</td></tr>
+      <tr><td>绩效</td><td>近 20 日单笔均值</td><td>&lt; 0 且 |t| ≥ 1</td><td>—</td></tr>
+      <tr><td>绩效</td><td>近 60 日单笔均值</td><td>&lt; 全样本 50%</td><td>t ≤ -2</td></tr>
+      <tr><td>右尾</td><td>近 60 日连板率</td><td>&lt; 9%</td><td>&lt; 5%</td></tr>
+      <tr><td>回撤</td><td>距历史峰值回撤</td><td>≥ 25%</td><td>≥ 35%</td></tr>
+      <tr><td>风格</td><td>综合漂移 z / 当前档期望</td><td>≥ 1.5 / &lt; 0</td><td>—</td></tr>
+      <tr><td>配置</td><td>与方案基线一致性</td><td>任一参数不一致</td><td>—</td></tr>
+      <tr><td>实绩</td><td>实绩 vs 同期回放</td><td>偏差 &lt; -10%（需 ≥ 20 笔）</td><td>—</td></tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>历次体检 <span class="sub">每交易日收盘后追加，同日覆盖</span></h2>
+    <table><tr><th>日期</th><th>状态</th><th>20 日</th><th>60 日</th><th>回撤</th><th>连板率</th><th>漂移</th><th>备注</th></tr><tr><td>2026-10-16</td><td><span class="dot" style="background:#3ddc97"></span>正常</td><td class="dn">-0.65%</td><td class="up">2.29%</td><td>8.41%</td><td>14.0%</td><td>0.25</td><td class="muted"></td></tr></table>
+  </div>
+
+  <div class="card">
+    <h2>数据积累 <span class="sub">体检的一切结论都建立在数据之上</span></h2>
+    <table>
+      <tr><th>项目</th><th>状态</th></tr>
+      <tr><td class="nm">本地全历史</td><td>2020-03-11 → 2026-10-16，1600 个交易日（可用 1488 天），4558 只票，前复权</td></tr>
+      <tr><td class="nm">数据新鲜度</td><td class="">落后 0 个工作日（超过 3 天需重建）</td></tr>
+      <tr><td class="nm">线上看板</td><td>2026-10-16 <span class="tag green">与本地同步</span></td></tr>
+      <tr><td class="nm">分钟级封板（seal）</td><td><span class="tag gray">全空</span> 该字段不可用，封板强度以 gateYz + 收盘强度代理</td></tr>
+    </table>
+    <div class="cmd"># 每日：云端自动追加（15:40，223 天滚动，不扩集）<br>
+# 每周：本地全历史重建（约 11 分钟）<br>
+node hist-fetch.js &amp;&amp; node hist-build.js &amp;&amp; node s3-health.js &amp;&amp; node s3-health-page.js</div>
+    <div class="foot">本地是「最全」：2020-08-24 起 6 年、4558 只票（含退市股，规避幸存者偏差）。云端是「最新」：每交易日自动追加，但不含 2020 年。策略验证一律以本地为准，云端只负责每日跟踪。</div>
+  </div>
+
+  <div class="foot" style="margin-top:18px">
+    口径说明：回放 = 用当前线上参数在本地全历史上重算（含佣金/印花税/过户费、T+1 开盘买入、断板尾盘卖出）；实绩 = 线上模拟账户真实净值点。历史回放不代表未来收益。<br>
+    生成时间 2026/10/17 17:57:40 ｜ 引擎 s3-health.js
+  </div>
+</div>
+</body>
+</html>
