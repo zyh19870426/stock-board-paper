@@ -41,11 +41,6 @@
   .hero h1{font-size:19px;font-weight:600}
   .hero .sub{color:var(--tx2);font-size:12px;margin-top:4px}
 
-  /* S3 体检状态条（读 data/health.json，点击进体检页） */
-  .healthbar{display:flex;align-items:center;gap:9px;margin-top:10px;background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:8px 12px;font-size:12.5px;cursor:pointer;color:var(--tx)}
-  .healthbar:hover{border-color:var(--accent)}
-  .healthbar .led{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
-  .healthbar .hbgo{margin-left:auto;color:var(--tx2);font-size:11.5px;white-space:nowrap}
   .hero .nav{margin-top:8px;font-size:12px}
   .hero .nav a{color:var(--accent);text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:3px 10px;display:inline-block}
   .hero .nav a:hover{border-color:var(--accent)}
@@ -154,8 +149,6 @@
   .mchart .mcfoot{display:flex;flex-wrap:wrap;gap:3px 12px;align-items:center;font-size:10.5px;color:var(--tx2);padding:4px 2px 5px;border-top:1px dashed var(--line);margin-top:4px}
   .mchart .mcfoot b{font-weight:600;color:var(--tx)}
   .mchart .mnochart{color:var(--tx2);font-size:10.5px;line-height:1.7;padding:14px 6px;text-align:center;border:1px dashed var(--line);border-radius:6px;margin:4px 0 2px}
-  .foot{margin-top:24px;color:var(--tx2);font-size:11px;line-height:1.7}
-  .foot b{color:var(--tx)}
 
   /* ============ 表格手机适配（≤760px）：表格 → 卡片堆叠 ============
      ★ 2026-10-16 用户要求：今日持仓 / 成交明细 要符合手机屏幕宽度布局。
@@ -284,12 +277,6 @@
 
     <!-- 详情区（随侧边栏切换） -->
     <div id="detail"></div>
-
-    <div class="foot">
-      <b>口径</b>：模拟盘按「T 日收盘决策 → T+1 开盘执行」运行，遵守 A 股 T+1（买入当日不可卖出）。具体买卖规则、阈值与参数不公开。<br>
-      <b>曲线口径</b>：默认画<b>线上模拟实测</b> —— 模拟账户从上线日（<span id="fStart">—</span>）起逐日累计的真实收益，一个交易日一个点，随模拟盘推进自动加长。要看这套策略历史上怎么走的，点「历史回放」切换：同参数从数据集可回测起点（<span id="fReplay">—</span>）回放至今、图上以虚线标示 —— 那是<b>回测</b>，与模拟盘不是同一件事，不要混读。<br>
-      模拟盘按开盘价 / 集合竞价价理想成交，未计滑点与冲击成本；数据由每日收盘后自动任务生成，不构成投资建议。
-    </div>
   </main>
 </div>
 
@@ -583,8 +570,9 @@ function renderHero(){
     '数据截至 <b>'+cnDate(DATA.date)+'</b> 收盘 · 更新于 '+new Date(DATA.updated).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'})
     + ' · 起点 '+DATA.startDate+' · 每套策略本金 '+fmtYuan(DATA.initialCash*100)+' 元'
     + (s.live && LIVE ? ' · <span style="color:var(--warn)">顶部数字为盘中实时预演（'+LIVE.bjTime+'），以收盘跑为准</span>' : '')
-  document.getElementById('fStart').textContent = DATA.startDate
-  document.getElementById('fReplay').textContent = DATA.replayStart || '—'
+  /* 底部口径小字已删除（用户要求），占位元素不再存在，写入前判空 */
+  var fs0 = document.getElementById('fStart'); if (fs0) fs0.textContent = DATA.startDate
+  var fr0 = document.getElementById('fReplay'); if (fr0) fr0.textContent = DATA.replayStart || '—'
 
   var h = ''
   h += card('当日盈亏'+liveTagOf(s), signYuan(s.dayPnlC)+' 元', cls(s.dayPnlC), '当日收益率 '+pct(s.dayRet))
