@@ -240,11 +240,7 @@
     <div id="sidelist"></div>
     <div class="snote">
       <div>点选任意策略 → 看该套详情</div>
-      <div style="margin-top:5px">看板默认停在 <b style="color:#c084fc">S3</b>（首板优化版 · 线上主策略）</div>
-      <div style="margin-top:5px">各策略独立 10 万本金、互不干扰</div>
-      <div style="margin-top:5px"><a href="./backtest.html" style="color:var(--accent)">策略回测（可改任意参数）→</a></div>
-      <div style="margin-top:5px"><a href="./plan.html" style="color:var(--accent)">改版方案 / 更新手册 →</a></div>
-      <div style="margin-top:5px"><a href="./health.html" style="color:var(--accent)">S3 体检（绩效/风格巡检）→</a></div>
+      <div style="margin-top:5px">各策略独立本金、互不干扰</div>
     </div>
   </aside>
 
@@ -295,8 +291,7 @@
     <div id="detail"></div>
 
     <div class="foot">
-      <b>口径</b>：T 日收盘选股 → T+1 开盘价买入（一字涨停弃买）→ <b>买入当日不可卖出（A 股 T+1），断板判定从买入次日起</b> → 断板即出（<b>14:57 判定，未封则在收盘集合竞价挂单，成交价＝收盘价</b>）/ 止损 / 回撤 / 最长 10 个交易日。<br>
-      <b>T+1 依据</b>：A 股当日买入的股票当日不可卖出，所以「断板即出」实际是 <b>T+2 起</b>每个交易日 14:57 看是否封住涨停、没封才卖 —— 回测完全按此执行（0 笔当日买卖）。<br>
+      <b>口径</b>：模拟盘按「T 日收盘决策 → T+1 开盘执行」运行，遵守 A 股 T+1（买入当日不可卖出）。具体买卖规则、阈值与参数不公开。<br>
       <b>曲线口径</b>：默认画<b>线上模拟实测</b> —— 模拟账户从上线日（<span id="fStart">—</span>）起逐日累计的真实收益，一个交易日一个点，随模拟盘推进自动加长。要看这套策略历史上怎么走的，点「历史回放」切换：同参数从数据集可回测起点（<span id="fReplay">—</span>）回放至今、图上以虚线标示 —— 那是<b>回测</b>，与模拟盘不是同一件事，不要混读。<br>
       模拟盘按开盘价 / 集合竞价价理想成交，未计滑点与冲击成本；数据由每日收盘后自动任务生成，不构成投资建议。
     </div>
@@ -311,9 +306,9 @@ var DATA = null, WIN = 30, CUR = ''   /* ★ 2026-10-20：默认 30 天窗口（
 /* ★ 2026-10-20：MODE 决定曲线数据源。'live' = 线上模拟账户（daily，上线日至今，默认）；
    'replay' = 同参数历史回放（curve，6 年）。用户要看的是模拟盘真实收益，回测只是备查。 */
 var MODE = 'live'
-/* ★ 2026-10-20：列表与曲线都隐藏这两套（M2 = 动态跟随对照，S2 = 只买 5 板对照），
-   它们在页面上占位置但没有操作价值。数据仍留在 dashboard.json 里，随时可放出来。 */
-var HIDE = ['M2', 'S2']
+/* ★ 2026-10-21：公开页面不展示 S3（线上主策略）入口，也不展示 M2/S2 对照。
+   数据仍留在 dashboard.json 里，随时可放出来。 */
+var HIDE = ['M2', 'S2', 'S3']
 function visibleOf (S) { return (S || []).filter(function (s) { return HIDE.indexOf(s.id) < 0 }) }
 var PAL = ['#c084fc', '#4aa3f0', '#f0a04a', '#4dd0a0', '#f472b6', '#facc15', '#38bdf8', '#fb923c']
 var IDS = []
@@ -520,20 +515,19 @@ function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,
 function shortName(s){
   return String(s.name||'').replace(/^策略[A-Za-z0-9]+\s*·\s*/,'').replace(/^跟随·/,'')
 }
-/* 详情/曲线标题用：去掉与 id 重复的前缀（M1 的 name 本身是「M1 · 微盘非流动性…」） */
+/* 详情/曲线标题用。
+ * ★ 2026-10-21：公开页不显示策略全名 —— 原名会带出构成（如「首板排机构票（S3+排龙虎榜机构）」），
+ *   等于把方法论写在标题上。这里统一换成中性代号，真实名称只在本地/私有仓库可见。 */
+var SEC_NAME = { E1: '主策略', M1: '组合策略', S1: '对照 A', S3: '对照 B', M2: '跟随' }
 function displayName(s){
-  var raw = String(s.name||'')
-  if(raw.indexOf(s.id) === 0) return raw.slice(s.id.length).replace(/^\s*·\s*/,'')
-  return shortName(s)
+  return SEC_NAME[s.id] || s.id
 }
 /* ★ lbcRange 形如 "2<N<4"，裸 < 会被 HTML 当标签吞掉 ⇒ 统一转义 */
 function sideSub(s){
-  if(s.id==='M1'){
-    var R = (s.risk && s.risk.rebalanceDays) || 10
-    return '微盘 · ' + R + ' 日调仓 · ' + (s.slots || 30) + ' 只'
-  }
-  if(s.id==='M2') return '动态跟随 · 三套候选'
-  return s.lbcRange ? (esc(s.lbcRange) + ' · ' + (s.slots||'') + ' 份') : ''
+  /* ★ 2026-10-21：公开页不写死策略参数（调仓日/只数/份数/连板区间），只留一句定位语。 */
+  if(s.id==='M1') return '组合'
+  if(s.id==='E1') return '主策略'
+  return ''
 }
 function renderSide(){
   var S = visibleOf(mergedStrategies())
@@ -726,61 +720,30 @@ function auctionRowsHTML(sid){
 }
 
 /* ---------- 详情区：持仓 / 当日盈亏 / 累计 / 可用金额 / 明日买入计划 ---------- */
-/* ★ M1 专属：把策略逻辑写在详情页（2026-10-20 用户要求）。
-   每一条都对应 lib/generic2.js 的实际实现，改参数时这里要同步改：
-   选股池 = scoreUniverse 里的过滤；打分 = spec 权重；建仓 = topN/buffer；
-   闸门 = timingOK(breadth)；成交 = 次日开盘 + 涨停弃买/跌停弃卖；成本 = FEES。 */
+/* ★ M1 专属卡片。2026-10-21：公开页不再写规则与参数（选股池/打分公式/缓冲/闸门阈值/费率），
+   只保留「组合型」这一性质与当前状态。实现细节只在本地代码里。 */
 function m1LogicHTML(s){
+  /* ★ 2026-10-21：公开页不再展示选股池条件、打分公式、缓冲倍数、择时阈值、成交与费率规则。
+     只保留「这是什么类型的策略」+ 当前状态，避免被反推。 */
   var rk = s.risk || {}
-  var topN = rk.topN || 30
-  var R = rk.rebalanceDays || 10
-  var keep = Math.round(topN * (rk.buffer || 1.5))
   var held = (s.positions || []).length
   var st = held ? ('当前持有 <b>' + held + '</b> 只') : '当前空仓'
-  if(!held && rk.gateToday === false) st += '（宽度闸门未开，不建仓）'
   if(rk.nextRebalanceInDays != null) st += '　·　距下次调仓 <b>' + rk.nextRebalanceInDays + '</b> 个交易日'
-  function row(k, v){
-    return '<tr><td class="l" style="white-space:nowrap;color:var(--tx2);width:88px;vertical-align:top">'+k+'</td>'
-      + '<td class="l" style="vertical-align:top">'+v+'</td></tr>'
-  }
   return '<div class="cards" style="display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:12px"><div class="card" style="background:var(--panel)">'
-    + '<div class="t">策略逻辑 · 它在做什么</div>'
+    + '<div class="t">组合状态</div>'
     + '<div class="m" style="line-height:1.8;margin-bottom:4px">'
-    + '不做打板。每到调仓日横扫全市场，买<b>最难交易、最没人要</b>的那批微盘股（流动性溢价），'
-    + '按分数取前 <b>'+topN+'</b> 只等权持有，每 <b>'+R+'</b> 个交易日重排一次。'
+    + '不做打板。组合型策略，按固定节奏整体调仓，与打板策略的收益相关性接近 0，适合各配一半。'
     + '</div>'
-    + '<table>'
-    + row('① 选股池', 'T 日收盘<b>同时</b>满足：上市满 130 个交易日 · 股价 ≥ 2.00 元 · 当日成交额 ≥ 1000 万元 · 名称不含「退」（<b>不剔除 ST</b>）。合格票不足 200 只则本轮不调仓。')
-    + row('② 打分', '<b>［ z(流动性差) − 0.5 × z(20 日涨停次数) ］ ÷ 1.5</b><br>'
-        + '流动性差 = 20 日平均「|当日涨跌幅| ÷ 当日成交额」再取对数 —— 同样的涨跌，成交额越小分越高（越难买进卖出）。<br>'
-        + '涨停次数取<b>负</b>权重：近 20 日涨停过的票扣分，主动避开（买不进、且已透支）。<br>'
-        + 'z = 当日合格池内标准化并截断在 ±3，权重绝对值和 1.5 用于归一。')
-    + row('③ 建仓', '分数降序从头买，买满 <b>'+topN+'</b> 只等权（每只约 1/'+topN+' 仓位）。'
-        + '已持有的票只要还排在前 <b>'+keep+'</b> 名（'+topN+'×1.5 缓冲）就继续拿，掉出去才换 —— 这是换手率的主要闸口。')
-    + row('④ 择时闸门', '唯一择时：全市场「上涨家数占比」的 <b>10 日均值 > 50%</b> 才允许调仓。'
-        + '不满足就<b>既不买也不卖</b>：空仓的继续空仓，持仓的继续持有。')
-    + row('⑤ 成交时点', 'T 日收盘打分 → <b>T+1 开盘价</b>成交。'
-        + '开盘一字涨停买不进（直接跳过）、一字跌停卖不出（留到下次）。'
-        + '每只预算 = 可用现金 ÷ min(剩余名额, 剩余候选数)，按 100 股取整。')
-    + row('⑥ 成本', '佣金 0.025%（最低 5 元）+ 印花税 0.05%（仅卖出）+ 过户费 0.001%，已计入净值。')
-    + row('⑦ 风控', '无止损、无回撤熔断。风险靠「分散在 '+topN+' 只小票」+「宽度闸门」两层控制 —— '
-        + '这也是它与打板策略（S3/E1）收益相关性接近 0、适合各配一半的原因。')
-    + '</table>'
     + '<div class="m" style="margin-top:8px;color:var(--tx2)">当前状态：'+st+'</div>'
     + '</div></div>'
 }
 
 /* ============================================================
- *  ★ 今日为什么没买 / 明日计划（2026-10-21 新增）
- *  E1 的规则链是单向的，「不买」必然来自下面几个原因之一，顺序 = 实际拦截顺序：
- *    ① 回撤熔断停手期       ② 情绪闸门（决策日收盘再封率超 250 日 80 分位）⇒ 当晚不选股
- *    ③ 名额已满（持仓 ≥ slots）  ④ 无合格候选（首板/成交额/量比/排机构 全过滤后为空）
- *    ⑤ 有候选但买不进（一字/涨停开盘）或未到 09:30~09:35 窗口
- *  时序纪律：决策发生在「上一交易日收盘」，执行在「次日开盘」。
- *    盘中 DATA.date 就是昨天 ⇒ risk.gateToday 正是「今天为什么不买」的直接原因；
- *    收盘后 dashboard 已更新到当天 ⇒ 同一字段变成「明天买不买」。
+ *  ★ 今日为什么没买 / 明日计划
+ *  ★ 2026-10-21：公开页只输出「哪个环节拦住了 + 状态」，不输出阈值、比率、过滤条件、
+ *    份数等任何可反推规则的细节。完整判定链只在本地与私有仓库。
  *  数据源：dashboard.json 的 risk.gateInfo / positions / nextCandidates，
- *          加 intraday.json 的 todayBuys / skippedToday。老数据缺字段时降级显示，不报错。
+ *          加 intraday.json 的 todayBuys / skippedToday。老数据缺字段时降级显示。
  * ============================================================ */
 function whyNoBuyHTML(s){
   var rk = s.risk || {}
@@ -807,25 +770,15 @@ function whyNoBuyHTML(s){
       + '<span style="flex:0 0 76px;color:' + C_NA + '">' + label + '</span>'
       + '<span style="flex:1;min-width:0;color:var(--tx)">' + txt + '</span></div>')
   }
-  function stop(label, txt){ if(!firstStop) firstStop = { label: label, txt: txt } }
+  function stop(label){ if(!firstStop) firstStop = { label: label } }
 
-  /* ① 闸门 */
-  if(gi){
-    var d = (gi.cur * 100).toFixed(2) + '%', th = (gi.thr * 100).toFixed(2) + '%'
-    var pq = gi.pct == null ? '' : '，当日处 ' + (gi.pct * 100).toFixed(1) + ' 分位'
-    if(gi.hit){
-      add('✗', C_STOP, '情绪闸门', '关闭　再封率 <b>' + d + '</b> &gt; 近 ' + gi.n + ' 日 ' + Math.round((gi.q || .8) * 100) + '% 分位 <b>' + th + '</b>'
-        + pq + ' ⇒ <b>当晚不选股，次日不开新仓</b>')
-      stop('情绪闸门关闭', '再封率 ' + d + ' 超阈值 ' + th + pq + '，当晚未选股')
-    } else {
-      add('✓', C_OK, '情绪闸门', '开放　再封率 ' + d + ' ≤ 阈值 ' + th + pq)
-    }
-  } else if(rk.gatedDays != null){
+  /* ① 闸门（★ 2026-10-21：公开页只给开/关，不显示再封率、阈值、分位、样本数） */
+  if(gi || rk.gatedDays != null){
     if(gateHit){
-      add('✗', C_STOP, '情绪闸门', '关闭（再封率超 250 日 80 分位）⇒ 当晚不选股，次日不开新仓')
-      stop('情绪闸门关闭', '再封率超近 250 日 80 分位，当晚未选股')
+      add('✗', C_STOP, '情绪闸门', '关闭 ⇒ 当晚不选股，次日不开新仓')
+      stop('情绪闸门关闭')
     } else {
-      add('✓', C_OK, '情绪闸门', '开放（无明细字段，等待下一次 dashboard 构建后显示具体数值）')
+      add('✓', C_OK, '情绪闸门', '开放')
     }
   } else {
     add('–', C_NA, '情绪闸门', '本策略未启用')
@@ -833,33 +786,32 @@ function whyNoBuyHTML(s){
 
   /* ② 回撤熔断 */
   if(ddPause){
-    add('✗', C_STOP, '回撤熔断', '停手中，还剩 ' + (rk.ddPauseLeft || 0) + ' 个交易日不开新仓')
-    stop('回撤熔断停手', '还剩 ' + (rk.ddPauseLeft || 0) + ' 个交易日')
+    add('✗', C_STOP, '回撤熔断', '停手中 ⇒ 暂不开新仓')
+    stop('回撤熔断停手')
   } else if(rk.ddTriggerCount > 0){
-    add('✓', C_OK, '回撤熔断', '未停手（历史触发 ' + rk.ddTriggerCount + ' 次，当前不在停手期）')
+    add('✓', C_OK, '回撤熔断', '正常（当前不在停手期）')
   } else {
-    add('–', C_NA, '回撤熔断', '现役未启用（ddStop=null，2026-10-21 复核后停用）')
+    add('–', C_NA, '回撤熔断', '现役未启用')
   }
 
-  /* ③ 名额 */
-  var posTxt = posN ? pos.map(function(p){ return p.name + '(' + p.code + ')' }).join('、') : '空仓'
+  /* ③ 名额（只给有无空位，不显示份数与持仓名） */
   if(freeN <= 0){
-    add('✗', C_STOP, '空余名额', '0 / ' + slots + '　名额已满：' + posTxt + ' ⇒ 即使有候选也不买')
-    stop('名额已满', slots + ' 个名额全被占（' + posTxt + '）')
+    add('✗', C_STOP, '空余名额', '已满 ⇒ 即使有候选也不买')
+    stop('名额已满')
   } else {
-    add('✓', C_OK, '空余名额', freeN + ' / ' + slots + '　持有：' + posTxt)
+    add('✓', C_OK, '空余名额', '有空位')
   }
 
-  /* ④ 候选 */
+  /* ④ 候选（保留「有几只、叫什麼」这类执行结果，删掉过滤条件说明） */
   if(cands.length){
     add('✓', C_OK, '候选(' + decDate + ')', '<b>' + cands.length + ' 只</b>：'
       + cands.slice(0, 5).map(function(c){ return c.name + '(' + c.code + ')' }).join('、')
       + (cands.length > 5 ? ' 等' : ''))
   } else if(gateHit || ddPause){
-    add('✗', C_STOP, '候选(' + decDate + ')', '0 只 —— 被上面那道闸门拦下，<b>根本没有进入选股</b>（不是选不出，是没选）')
+    add('✗', C_STOP, '候选(' + decDate + ')', '未进入选股（被上游环节拦下）')
   } else {
-    add('✗', C_STOP, '候选(' + decDate + ')', '0 只 —— 当日无合格首板：首板 + 成交额 ≥ 2000 万 + 量比 ≥ 1.5 + 排龙虎榜机构，四条全过滤后为空')
-    stop('当日无合格候选', '首板/成交额/量比/排机构 四条过滤后为空')
+    add('✗', C_STOP, '候选(' + decDate + ')', '无符合条件的标的')
+    stop('当日无合格候选')
   }
 
   /* ⑤ 执行（只在当日有意义） */
@@ -896,11 +848,8 @@ function whyNoBuyHTML(s){
       + '<span>' + (afterClose ? '明日买入计划' : '今日为什么不买') + '　·　依据 ' + esc(decDate) + ' 收盘</span>'
       + (bj ? '<span style="opacity:.75">页面日期 ' + esc(bj) + ' · ' + esc(phase) + '</span>' : '')
     + '</div>'
-    + '<div style="margin-top:5px;font-size:14px;font-weight:600;color:' + ccol + '">' + concl
-      + (firstStop ? '<span style="font-weight:400;font-size:12px;color:var(--tx2)">　' + firstStop.txt + '</span>' : '') + '</div>'
+    + '<div style="margin-top:5px;font-size:14px;font-weight:600;color:' + ccol + '">' + concl + '</div>'
     + rows.join('')
-    + '<div style="font-size:10.5px;color:var(--tx2);margin-top:7px;border-top:1px solid var(--line);padding-top:6px">'
-      + '判定顺序＝实际拦截顺序。闸门关闭时「候选 0 只」是结果不是原因 —— 闸门关 ⇒ 当晚不选股 ⇒ 次日自然没有可买的票。'
     + '</div></div>'
   return h
 }
@@ -948,7 +897,7 @@ function renderDetail(){
             ? ('距下次调仓 <b>' + rkm.nextRebalanceInDays + '</b> 个交易日' + (rkm.nextRebalanceDate ? '（' + rkm.nextRebalanceDate + '）' : ''))
             : '下次调仓日：随窗口推进自动给出')
         + '</div>'
-      + '<div class="m" style="margin-top:3px">每只约 <b>' + perM.toLocaleString() + ' 元</b>（总资产 ÷ ' + (rkm.topN || 30) + ' 只）'
+      + '<div class="m" style="margin-top:3px">每只约 <b>' + perM.toLocaleString() + ' 元</b></div>'
         + '　·　无止损、无回撤熔断，清仓只靠宽度闸门</div>'
       + '</div></div>'
   }
@@ -978,9 +927,8 @@ function renderDetail(){
       + '<div class="t">风控状态 · 人为跟随</div>'
       + '<div class="m">' + gateHTML + '</div>'
       + '<div class="m" style="margin-top:3px">' + ddHTML + '</div>'
-      + '<div class="m" style="margin-top:3px">每份约 <b>' + perSlot.toLocaleString() + ' 元</b>（总资产 ÷ ' + rk.slots + ' 份）'
-        + '　·　止损 ' + rk.stopLossPct + '%（买入价 ×' + (1 - rk.stopLossPct / 100).toFixed(2) + '）'
-        + '　·　移动回撤线 ' + rk.trailPct + '%　·　最长持有 ' + rk.maxHoldDays + ' 个交易日</div>'
+      + '<div class="m" style="margin-top:3px">每份约 <b>' + perSlot.toLocaleString() + ' 元</b>'
+        + '　·　风险控制：止损 / 回撤 / 持有上限（参数不公开）</div>'
       + '</div></div>'
   }
 
@@ -1011,16 +959,13 @@ function renderDetail(){
               +'<td class="l" data-l="买入日">'+(p.buyDate||'—')+'</td><td data-l="持有">'+hold+'</td></tr>'
           }).join('') + '</table>'
     }else{
-    h += '<table><tr class="thead"><th class="l">代码</th><th class="l">名称</th><th>板</th><th>股数</th><th>买入价</th><th>现价</th><th>止损价</th><th>浮动盈亏</th><th class="l">状态</th></tr>'
+    h += '<table><tr class="thead"><th class="l">代码</th><th class="l">名称</th><th>板</th><th>股数</th><th>买入价</th><th>现价</th><th>浮动盈亏</th><th class="l">状态</th></tr>'
       + s.positions.map(function(p){
-          /* 止损价 = 买入价 ×（1 − 止损%）；人为跟随时跌破即走 */
-          var slPct = (s.risk && s.risk.stopLossPct != null) ? s.risk.stopLossPct : 20
-          var slC = price(Math.round(p.buyC * (1 - slPct / 100)))
           var cur = p.curC!=null ? price(p.curC) : '—'
           var pnl = p.curPnlC!=null ? '<span class="'+cls(p.curPnlC)+'">'+signYuan(p.curPnlC)+' 元</span>' : '<span style="color:var(--tx2)">—</span>'
           /* ★ data-l 供窄屏卡片布局当字段名（桌面端不用，不影响渲染） */
           return '<tr><td class="l" data-l="代码">'+p.code+'</td><td class="l" data-l="名称">'+p.name+'</td><td data-l="板">'+p.lbc+'</td><td data-l="股数">'+p.shares+'</td>'
-            +'<td data-l="买入价">'+price(p.buyC)+'</td><td data-l="现价">'+cur+'</td><td data-l="止损价" style="color:var(--tx2)">'+slC+'</td><td data-l="浮动盈亏">'+pnl+'</td>'
+            +'<td data-l="买入价">'+price(p.buyC)+'</td><td data-l="现价">'+cur+'</td><td data-l="浮动盈亏">'+pnl+'</td>'
             +'<td class="l" data-l="状态">'+(p.ztNow?'<span class="tag b">🔒 涨停中</span>':'<span class="tag sk">持有中</span>')+'（'+p.buyDate+' 买入）</td></tr>'
         }).join('') + '</table>'
     }
@@ -1059,9 +1004,9 @@ function renderDetail(){
      旧版只列「排进空位的 1~2 只」，满仓时直接空 ⇒ 看不出今天其实选出了票。
      现在列全部候选（最多 8 只），每只标参考价、预计能买几手、为什么不会买。 */
   var closed = !LIVE || LIVE.phase!=='trading'
-  var colB = '<table><tr class="thead"><th class="l">明日买入计划（全部候选）'+(s.lbcPending?'　<span style="color:var(--warn);font-size:11px">⚡临时 · 未排机构</span>':'')+'</th></tr>'
+  var colB = '<table><tr class="thead"><th class="l">明日买入计划（全部候选）'+(s.lbcPending?'　<span style="color:var(--warn);font-size:11px">⚡ 临时版</span>':'')+'</th></tr>'
   if(s.lbcPending){
-    colB += '<tr><td class="l" data-l="" style="color:var(--warn);font-size:11px">⚡ 最新交易日龙虎榜尚未公布（约 18:00 出），本表<b>暂未剔除机构席位票</b>；18:40 定稿跑批后自动更新为正式版。明日实际成交以定稿版为准。</td></tr>'
+    colB += '<tr><td class="l" data-l="" style="color:var(--warn);font-size:11px">⚡ 收盘定稿跑批后自动更新为正式版，明日实际成交以正式版为准。</td></tr>'
   }
   var planAll = s.nextCandidatesAll || null
   if(!closed){
@@ -1078,7 +1023,7 @@ function renderDetail(){
         + '<br><span style="font-size:11px;color:var(--tx2)">参考价 '+px+'（今收）　'+buyTxt+'</span></td></tr>'
     }).join('')
     colB += '<tr><td class="l" data-l="" style="color:var(--tx2);font-size:11px">明日开盘挂单，一字涨停开盘则弃买'
-      + (budget ? '　·　每份可用约 ' + fmtYuan(budget) + ' 元（总资产 ÷ ' + ((s.risk&&s.risk.slots)||1) + ' 份）' : '')
+      + (budget ? '　·　每份可用约 ' + fmtYuan(budget) + ' 元' : '')
       + (planAll[0].freeSlots != null ? '　·　本次空位 ' + planAll[0].freeSlots + ' 个（只有前 ' + planAll[0].freeSlots + ' 顺位真的会买）' : '')
       + '<br>参考价 = 今日收盘价；实际按明日开盘价成交，股数与金额会有差异。买不起也照实显示，不隐藏。</td></tr>'
   } else if(s.nextCandidates && s.nextCandidates.length){
@@ -1641,7 +1586,20 @@ function renderQmt () {
   box.style.display = 'block'
 }
 
-/* 对比：持仓 / 今日成交 / 情绪闸门。基准固定为主策略（DATA.mainId，默认 E1）。 */
+/* 对比：持仓 / 今日成交 / 情绪闸门。
+ * ★ 2026-10-21：公开页面只给「结果状态」，不输出任何代码、股数、价格、阈值、分位数，
+ *   避免从比对明细反推策略规则。明细留在本地 qmt-live.json（私有仓库全量）。 */
+function crow (label, state, note) {
+  var map = {
+    same: '<span style="color:var(--good);font-weight:600">✓ 一致</span>',
+    diff: '<span style="color:#e0703a;font-weight:600">✗ 不同</span>',
+    ref: '<span style="color:var(--tx2)">参考（不判定）</span>',
+    na: '<span style="color:var(--tx2)">无法比对</span>'
+  }
+  return '<div class="crow"><span class="ck">' + label + '</span><span class="cv">' + (note || '') + '</span>'
+    + (map[state] || '') + '</div>'
+}
+
 function compareRows () {
   var main = (DATA && DATA.mainId) || 'E1'
   var sim = null
@@ -1650,100 +1608,43 @@ function compareRows () {
   ;((DATA && DATA.strategies) || []).forEach(function (x) { if (x.id === main) risk = x.risk })
   var qp = (QMT.positions || []).map(function (p) { return p.code6 }).sort()
   var sp = ((sim && sim.positions) || []).map(function (p) { return p.code }).sort()
-  var ok = function (b) { return b ? '<span style="color:var(--good);font-weight:600">✓ 一致</span>' : '<span style="color:#e0703a;font-weight:600">✗ 不同</span>' }
-  var out = ''
-  var liveToday = LIVE && LIVE.bjDate && dnum(LIVE.bjDate) === bjToday().replace(/-/g, '')
-  if (LIVE && !liveToday) {
-    out += '<div class="cnote" style="color:#e0703a;padding-left:0">⚠ 模拟账的盘中帧是 ' + esc(LIVE.bjDate || '—')
-      + ' ' + esc(LIVE.bjTime || '') + '，不是今天 ⇒ 下面的「今日买卖」对比不同步，只作参考。</div>'
-  }
-
-  /* 持仓：★ 只作参考，不判红。
-     QMT 是真实账户（起点 100 万、含人工补单），模拟是独立的 50 万账本，
-     两者初始状态就不同 ⇒ 持仓不同是必然的，不是策略分歧。判断策略是否一致看
-     「今日策略买卖」「闸门」「参数」三项，那才是行为层证据。 */
+  /* 持仓：两套独立账户（起点与建仓日均不同），不同是必然，只作参考不判红 */
   var posSame = qp.join(',') === sp.join(',')
-  out += '<div class="crow"><span class="ck">持仓（参考）</span>'
-    + '<span class="cv">QMT ' + (qp.length ? qp.join('、') : '空仓') + '　｜　模拟 ' + (sp.length ? sp.join('、') : '空仓') + '</span>'
-    + (posSame ? '<span style="color:var(--good)">相同</span>' : '<span style="color:var(--tx2)">两套独立账户，本就可能不同</span>') + '</div>'
-  if (!posSame) {
-    var manual = (QMT.positions || []).filter(function (p) { return p.manual }).map(function (p) { return p.code6 })
-    out += '<div class="cnote">' + (manual.length
-      ? 'QMT 侧 <b>' + manual.join('、') + '</b> 是人工补单（备注 manual），不计入策略业绩。'
-      : 'QMT 侧持仓都来自策略，但两边起点不同（100 万 vs 50 万、不同日期建仓）⇒ 标的可以不同。')
-      + '</div>'
-  }
 
   var qb = (QMT.trades || []).filter(function (t) { return t.side === 'buy' && t.isStrategy })
   var qs = (QMT.trades || []).filter(function (t) { return t.side === 'sell' && t.isStrategy })
   var sb = (sim && sim.todayBuys) || []
-  /* ★ 模拟账盘中帧里的 todaySells 是「预演」（preview=true / 原因带【预演】），
-     到收盘才算真成交。QMT 侧是真实成交 ⇒ 比之前必须剔除预演，否则会把
-     「如果现在收盘会卖」误报成「两边卖出不一致」。 */
+  /* 模拟账的 todaySells 里含「预演」项，剔掉才是真成交 */
   var ssAll = (sim && sim.todaySells) || []
   var ss = ssAll.filter(function (x) { return !(x.preview === true || /^【预演/.test(x.reason || '')) })
-  var sPrev = ssAll.length - ss.length
   var bs = qb.map(function (t) { return t.code6 }).sort().join(',') === sb.map(function (x) { return x.code }).sort().join(',')
   var sss = qs.map(function (t) { return t.code6 }).sort().join(',') === ss.map(function (x) { return x.code }).sort().join(',')
-  out += '<div class="crow"><span class="ck">今日策略买入</span>'
-    + '<span class="cv">QMT ' + (qb.length ? qb.map(function (t) { return t.code6 + ' ' + t.shares + '股@' + price(t.avgC) }).join('、') : '无')
-    + '　｜　模拟 ' + (sb.length ? sb.map(function (x) { return x.code + ' ' + x.shares + '股@' + price(x.buyC) }).join('、') : '无')
-    + (LIVE && LIVE.bjTime ? '（帧 ' + esc(LIVE.bjTime) + '）' : '') + '</span>'
-    + ok(bs) + '</div>'
-  out += '<div class="crow"><span class="ck">今日策略卖出</span>'
-    + '<span class="cv">QMT ' + (qs.length ? qs.map(function (t) { return t.code6 + ' @' + price(t.avgC) }).join('、') : '无')
-    + '　｜　模拟 ' + (ss.length ? ss.map(function (x) { return x.code + ' @' + price(x.sellC) }).join('、') : '无') + '</span>'
-    + ok(sss) + '</div>'
-  if (sPrev) {
-    out += '<div class="cnote">模拟账另有 ' + sPrev + ' 笔「预演卖出」未计入 —— 那是按当前现价推算的「若 14:57 仍未封板则会卖」，不是已成交。</div>'
-  }
 
-  /* 情绪闸门：QMT 从 yzHist 复算；模拟取 dashboard.json 的 risk.gateToday */
   var g = QMT.gate
   var qClose = g ? g.closed : null
   var sClose = risk ? risk.gateToday : null
   var qG = g && g.date ? String(g.date) : ''
   var sG = (DATA && DATA.date) ? dnum(DATA.date) : ''
   var sameGateDay = qG && sG && qG === sG
-  var gt = (g && g.cur != null && g.thr != null)
-    ? ('再封率 ' + (g.cur * 100).toFixed(2) + '% ' + (qClose ? '>' : '≤') + ' 阈值 ' + (g.thr * 100).toFixed(2) + '%（n=' + g.n + '）⇒ ' + (qClose ? '关闭' : '放行'))
-    : '无数据'
-  out += '<div class="crow"><span class="ck">情绪闸门</span>'
-    + '<span class="cv">QMT ' + gt + '　｜　模拟 ' + (sClose == null ? '无记录' : (sClose ? '关闭' : '放行'))
-    + (sG ? '（' + esc(DATA.date) + ' 的 dashboard）' : '') + '</span>'
-    + (qClose == null || sClose == null ? '<span style="color:var(--tx2)">无法比对</span>'
-      : (sameGateDay ? ok(qClose === sClose) : '<span style="color:var(--tx2)">日期不同，不可直接比</span>')) + '</div>'
-  if (g && g.date) {
-    out += '<div class="cnote">闸门取 ' + esc(g.date.slice(0, 4) + '-' + g.date.slice(4, 6) + '-' + g.date.slice(6, 8))
-      + ' 收盘的再封率 —— 它决定「次日（今天）开不开新仓」。两边同日同规则，关闭就意味着今天都不该买。</div>'
-  }
+
+  var out = ''
+  out += crow('持仓', posSame ? 'ref' : 'ref', posSame ? '' : '<span style="font-size:11px;opacity:.7">两套独立账户</span>')
+  out += crow('今日策略买入', bs ? 'same' : 'diff')
+  out += crow('今日策略卖出', sss ? 'same' : 'diff')
+  out += crow('情绪闸门',
+    (qClose == null || sClose == null) ? 'na' : (sameGateDay ? (qClose === sClose ? 'same' : 'diff') : 'na'),
+    sameGateDay ? '' : '<span style="font-size:11px;opacity:.7">日期不同</span>')
   return out
 }
 
 function consistencyBlock () {
+  /* ★ 2026-10-21：只给「同源 / 有分歧」，不输出比对项数、参数名、参数值、待买队列、策略日志，
+     这些都会让人反推规则。明细只在本地 qmt-live.json（私有仓库）。 */
   var c = QMT.consistency
-  if (!c) return '<div class="crow"><span class="ck">参数一致性</span><span class="cv">未采集到</span></div>'
-  if (c.ok === null || c.error) return '<div class="crow"><span class="ck">参数一致性</span><span class="cv" style="color:#e0703a">校验失败：' + esc(String(c.error || '')) + '</span></div>'
-  var out = '<div class="crow"><span class="ck">参数一致性</span><span class="cv">' + c.matched + '/' + c.checked + ' 项与云端 config.json 相同'
-    + (c.errors ? '，<b style="color:#e0703a">' + c.errors + ' 项不一致</b>' : '') + '　<span style="color:var(--tx2);font-size:11px">校验于 ' + esc(c.at) + '</span></span>'
-    + (c.ok ? '<span style="color:var(--good);font-weight:600">✓ 同源</span>' : '<span style="color:#e0703a;font-weight:600">✗ 有分歧</span>') + '</div>'
-  ;(c.diffs || []).forEach(function (d) {
-    if (d.level === 'error') {
-      out += '<div class="cnote" style="color:#e0703a">✗ <b>' + esc(d.key) + '</b>：模拟 = ' + esc(JSON.stringify(d.js)) + '　QMT = ' + esc(JSON.stringify(d.qmt)) + '</div>'
-    } else if (d.note) {
-      out += '<div class="cnote">· ' + esc(d.key) + '：' + esc(d.note) + '</div>'
-    }
-  })
-  if (QMT.state && (QMT.state.pendingBuy || []).length) {
-    out += '<div class="cnote">QMT 待买队列 ' + QMT.state.pendingBuy.length + ' 只：'
-      + QMT.state.pendingBuy.map(function (p) { return esc(p.code) + '(#' + p.pickRank + ')' }).join('、')
-      + '　选股日 ' + esc(QMT.state.lastPickDate || '—') + '</div>'
-  }
-  if (QMT.logs && QMT.logs.length) {
-    out += '<div class="cnote" style="margin-top:6px"><b>QMT 策略日志（今日）</b><br>'
-      + QMT.logs.slice(-6).map(function (x) { return esc(x) }).join('<br>') + '</div>'
-  }
-  return out
+  if (!c) return crow('策略一致性', 'na', '<span style="font-size:11px;opacity:.7">未采集</span>')
+  if (c.ok === null || c.error) return crow('策略一致性', 'diff', '<span style="font-size:11px;opacity:.7">校验失败</span>')
+  return crow('策略一致性', c.ok ? 'same' : 'diff',
+    '<span style="font-size:11px;opacity:.7">校验于 ' + esc(c.at) + '</span>')
 }
 
 /* ---------- 滚动验证：弱化为 M2 卡片里的一个小标签 ----------
