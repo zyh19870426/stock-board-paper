@@ -863,7 +863,7 @@ function renderDetail(){
     : (s.isRef ? '<span class="tag sk" style="font-size:10px;padding:0 5px;margin-left:6px">对照组 · 不作为操作依据</span>' : '<span class="tag b" style="font-size:10px;padding:0 5px;margin-left:6px">主策略</span>')
   var h = '<div class="stitle" style="border-color:'+c+'">'+s.id+' · '+displayName(s)+' 详情'
     + refTag
-    + '<small>'+esc(s.brief)+'</small></div>'
+    + (s.brief ? '<small>'+esc(s.brief)+'</small>' : '') + '</div>'
 
   /* M1 专属：策略逻辑卡片（放在最前，先解释再给数字） */
   if(s.id === 'M1') h += m1LogicHTML(s)
