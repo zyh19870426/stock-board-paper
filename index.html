@@ -256,11 +256,6 @@
       <div class="sub" id="sub">加载中…</div>
       <div id="err"></div>
       <div class="kpi" id="kpi"></div>
-      <a class="healthbar" id="healthbar" href="./health.html" style="display:none">
-        <span class="led" id="hbled"></span>
-        <span id="hbtxt"></span>
-        <span class="hbgo">查看体检报告 →</span>
-      </a>
     </div>
 
     <div class="live" id="live" style="display:none"></div>
@@ -1867,28 +1862,12 @@ document.getElementById('sideclose').onclick = closeSide
 document.addEventListener('keydown', function(e){ if(e.key === 'Escape' && sideIsOpen()) closeSide() })
 
 /* ★ S3 体检状态条（data/health.json 由 s3-health.js 每日收盘后生成） */
-function loadHealthBar(){
-  fetch('./data/health.json?_='+Date.now(), {cache:'no-store'}).then(function(r){ return r.ok ? r.json() : null })
-    .then(function(j){
-      if(!j || !j.status) return
-      var col = j.status==='green' ? '#3ddc97' : (j.status==='watch' ? '#f0a04a' : '#f04a4a')
-      var el = document.getElementById('healthbar')
-      el.style.display = 'flex'
-      var led = document.getElementById('hbled')
-      led.style.background = col
-      led.style.boxShadow = '0 0 0 3px '+col+'22'
-      var txt = 'S3 体检 · <b style="color:'+col+'">'+j.statusText+'</b>（数据截至 '+j.date+'，连续第 '+j.consecutive+' 次）'
-      if(j.counts.red) txt += ' · <span style="color:#f04a4a">红线 '+j.counts.red+' 项</span>'
-      else if(j.counts.watch) txt += ' · <span style="color:#f0a04a">观察 '+j.counts.watch+' 项</span>'
-      document.getElementById('hbtxt').innerHTML = txt
-    }).catch(function(){ /* 体检文件缺失不打扰看板 */ })
-}
+/* ★ 2026-10-21：S3 体检改为本地定期执行，公开页不再拉 data/health.json，也不再挂体检入口。 */
 
 loadLive()
 loadQmt()
 loadMinuteChart()
 loadSeries()
-loadHealthBar()
 setInterval(loadLive, 60000)
 /* ★ 2026-10-21：行情独立 30 秒一刷（不跟 60 秒的静态帧走），见 applyQuotes 注释 */
 setInterval(applyQuotes, 30000)
