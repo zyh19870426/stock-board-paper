@@ -942,12 +942,12 @@ function renderDetail(){
               +'<td class="l" data-l="买入日">'+(p.buyDate||'—')+'</td><td data-l="持有">'+hold+'</td></tr>'
           }).join('') + '</table>'
     }else{
-    h += '<table><tr class="thead"><th class="l">代码</th><th class="l">名称</th><th>板</th><th>股数</th><th>买入价</th><th>现价</th><th>浮动盈亏</th><th class="l">状态</th></tr>'
+    h += '<table><tr class="thead"><th class="l">代码</th><th class="l">名称</th><th>股数</th><th>买入价</th><th>现价</th><th>浮动盈亏</th><th class="l">状态</th></tr>'
       + s.positions.map(function(p){
           var cur = p.curC!=null ? price(p.curC) : '—'
           var pnl = p.curPnlC!=null ? '<span class="'+cls(p.curPnlC)+'">'+signYuan(p.curPnlC)+' 元</span>' : '<span style="color:var(--tx2)">—</span>'
-          /* ★ data-l 供窄屏卡片布局当字段名（桌面端不用，不影响渲染） */
-          return '<tr><td class="l" data-l="代码">'+p.code+'</td><td class="l" data-l="名称">'+p.name+'</td><td data-l="板">'+p.lbc+'</td><td data-l="股数">'+p.shares+'</td>'
+          /* ★ data-l 供窄屏卡片布局当字段名（桌面端不用，不影响渲染）；lbc（连板数）已从公开数据剔除 */
+          return '<tr><td class="l" data-l="代码">'+p.code+'</td><td class="l" data-l="名称">'+p.name+'</td><td data-l="股数">'+p.shares+'</td>'
             +'<td data-l="买入价">'+price(p.buyC)+'</td><td data-l="现价">'+cur+'</td><td data-l="浮动盈亏">'+pnl+'</td>'
             +'<td class="l" data-l="状态">'+(p.ztNow?'<span class="tag b">🔒 涨停中</span>':'<span class="tag sk">持有中</span>')+'（'+p.buyDate+' 买入）</td></tr>'
         }).join('') + '</table>'
@@ -967,7 +967,7 @@ function renderDetail(){
   var aucDate = (LIVE && LIVE.bjDate) ? LIVE.bjDate : s.date
   if(buys.length){
     colA += buys.map(function(b){
-      return '<tr><td class="l" data-l=""><span class="tag b">买入</span> '+b.name+'（'+b.code+'）'+b.lbc+' 板 '+b.shares+' 股 @ '+price(b.buyC)+'（开盘成交）'
+      return '<tr><td class="l" data-l=""><span class="tag b">买入</span> '+b.name+'（'+b.code+'）'+b.shares+' 股 @ '+price(b.buyC)+'（开盘成交）'
         + aucDiffTxt(aucOf(aucDate, b.code, 'buy')) + '</td></tr>'
     }).join('')
   }
@@ -1002,19 +1002,19 @@ function renderDetail(){
       var buyTxt = ok
         ? '可买 <b>'+x.shares+'</b> 股 ≈ <b>'+fmtYuan(x.estC)+'</b> 元'
         : '<span style="color:var(--warn)">'+esc(x.block||'不可买')+'</span>'
-      return '<tr><td class="l" data-l="">第'+(x.rank||i+1)+'顺位　<b>'+x.code+' '+esc(x.name)+'</b>　'+x.lbc+' 板　成交额 '+((x.amount||0)/1e8).toFixed(2)+' 亿'
+      return '<tr><td class="l" data-l="">第'+(x.rank||i+1)+'顺位　<b>'+x.code+' '+esc(x.name)+'</b>　成交额 '+((x.amount||0)/1e8).toFixed(2)+' 亿'
         + '<br><span style="font-size:11px;color:var(--tx2)">参考价 '+px+'（今收）　'+buyTxt+'</span></td></tr>'
     }).join('')
-    colB += '<tr><td class="l" data-l="" style="color:var(--tx2);font-size:11px">明日开盘挂单，一字涨停开盘则弃买'
+    colB += '<tr><td class="l" data-l="" style="color:var(--tx2);font-size:11px">明日开盘挂单'
       + (budget ? '　·　每份可用约 ' + fmtYuan(budget) + ' 元' : '')
-      + (planAll[0].freeSlots != null ? '　·　本次空位 ' + planAll[0].freeSlots + ' 个（只有前 ' + planAll[0].freeSlots + ' 顺位真的会买）' : '')
-      + '<br>参考价 = 今日收盘价；实际按明日开盘价成交，股数与金额会有差异。买不起也照实显示，不隐藏。</td></tr>'
+      + (planAll[0].freeSlots != null ? '　·　本次空位 ' + planAll[0].freeSlots + ' 个' : '')
+      + '<br>参考价 = 今日收盘价；实际按明日开盘价成交，股数与金额会有差异。</td></tr>'
   } else if(s.nextCandidates && s.nextCandidates.length){
     colB += s.nextCandidates.map(function(x,i){
-      return '<tr><td class="l" data-l="">第'+(i+1)+'顺位　'+x.code+' '+x.name+'　'+x.lbc+' 板　成交额 '+((x.amount||0)/1e8).toFixed(2)+' 亿</td></tr>'
+      return '<tr><td class="l" data-l="">第'+(i+1)+'顺位　'+x.code+' '+x.name+'　成交额 '+((x.amount||0)/1e8).toFixed(2)+' 亿</td></tr>'
     }).join('')
   } else {
-    colB += '<tr><td class="l" data-l="" style="color:var(--tx2)">'+(s.m2&&s.m2.pickToday.pause?'今日判定空仓，明日不开新仓':'无候选（今日没有同时满足量能比 / 成交额 / 连板档位 / 闸门的票）')+'</td></tr>'
+    colB += '<tr><td class="l" data-l="" style="color:var(--tx2)">'+(s.m2&&s.m2.pickToday.pause?'今日判定空仓，明日不开新仓':'今日无满足条件的候选')+'</td></tr>'
   }
   colB += '</table>'
 
@@ -1033,7 +1033,7 @@ function renderDetail(){
     ;(arr||[]).forEach(function(x){
       if(!x || !x.code || seenCode[x.code]) return
       seenCode[x.code] = 1
-      chartCodes.push({ code:x.code, name:x.name, lbc:x.lbc,
+      chartCodes.push({ code:x.code, name:x.name,
         tag: ai===0 ? '今日买入' : (ai===1 ? '今日卖出' : '持仓') })
     })
   })
@@ -1048,11 +1048,11 @@ function renderDetail(){
   ;(s.trades||[]).forEach(function(t){
     /* ★ 同一笔交易的两条腿共享 pair 信息：点开任一腿都能看到「买入日 + 卖出日」两张分时 */
     var pair = { bd:t.buyDate, bp:t.buyC, sd:t.sellDate, sp:t.sellC }
-    evs.push({d:t.buyDate, ty:'买入', code:t.code, name:t.name, lbc:t.lbc, sh:t.shares, p:t.buyC, tag:'b', tm:'09:30', bd:pair.bd, bp:pair.bp, sd:pair.sd, sp:pair.sp})
-    evs.push({d:t.sellDate, ty:'卖出', code:t.code, name:t.name, lbc:t.lbc, sh:t.shares, p:t.sellC,
+    evs.push({d:t.buyDate, ty:'买入', code:t.code, name:t.name, sh:t.shares, p:t.buyC, tag:'b', tm:'09:30', bd:pair.bd, bp:pair.bp, sd:pair.sd, sp:pair.sp})
+    evs.push({d:t.sellDate, ty:'卖出', code:t.code, name:t.name, sh:t.shares, p:t.sellC,
       pnl:t.pnlC, pp:t.pnlPct, reason:t.reason, tag:'s', tm:sellTimeOf(t), bd:pair.bd, bp:pair.bp, sd:pair.sd, sp:pair.sp})
   })
-  ;(s.positions||[]).forEach(function(p){ evs.push({d:p.buyDate, ty:'买入', code:p.code, name:p.name, lbc:p.lbc, sh:p.shares, p:p.buyC, tag:'b', tm:'09:30', open:'持仓中', bd:p.buyDate, bp:p.buyC}) })
+  ;(s.positions||[]).forEach(function(p){ evs.push({d:p.buyDate, ty:'买入', code:p.code, name:p.name, sh:p.shares, p:p.buyC, tag:'b', tm:'09:30', open:'持仓中', bd:p.buyDate, bp:p.buyC}) })
   evs.sort(function(a,b){ return a.d===b.d ? (a.ty<b.ty?-1:1) : (a.d<b.d?1:-1) })
 
   /* ★ 2026-10-17 晚：按用户要求，成交明细的表格版整体移除，只保留分时卡片形态——
@@ -1076,7 +1076,7 @@ function renderDetail(){
 }
 
 /* ================= 今日分时图（SVG） =================
- * 数据：MCHART = { rows:[{date,code,name,lbc,prevC,bars:[{t,o,h,l,c,v}]}] }
+ * 数据：MCHART = { rows:[{date,code,name,prevC,bars:[{t,o,h,l,c,v}]}] }（lbc 已从公开数据剔除）
  * 规则：
  *   · 只画「该票最新一天」的序列（最近一个交易日有数据就用它）；
  *   · y 轴以「昨收」为基准对称，涨红跌绿（A 股口径）；
@@ -1411,7 +1411,7 @@ function renderLive(){
   h += '<div class="lv-grid"><div class="lv">'
   h += '<div class="nm">当日 <span class="'+cls(lv.dayRet)+'">'+pct(lv.dayRet)+'</span>　累计 <span class="'+cls(lv.cumRet)+'">'+pct(lv.cumRet)+'</span></div>'
   if(lv.todayBuys && lv.todayBuys.length){
-    h += lv.todayBuys.map(function(b){ return '<div class="row">🔴 买入 <b>'+b.name+'</b> '+b.lbc+'板 '+b.shares+'股 @ <b>'+price(b.buyC)+'</b>（开盘成交）</div>' }).join('')
+    h += lv.todayBuys.map(function(b){ return '<div class="row">🔴 买入 <b>'+b.name+'</b> '+b.shares+'股 @ <b>'+price(b.buyC)+'</b>（开盘成交）</div>' }).join('')
   }
   if(lv.todaySells && lv.todaySells.length){
     h += lv.todaySells.map(function(t){
