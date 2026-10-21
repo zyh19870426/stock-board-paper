@@ -250,6 +250,8 @@
 
   <!-- ==================== 右侧：主区 ==================== -->
   <main class="main">
+    <!-- QMT 策略健康横幅：只在 status!=ok 时由脚本显示 -->
+    <div id="qmtHealth" style="display:none"></div>
     <div class="hero">
       <div class="h1">
         <h1 id="ptitle">打板模拟跟进</h1>
@@ -1994,6 +1996,43 @@ setInterval(loadSeries, 60000)
 setInterval(loadQmt, 60000)
 setInterval(applyQmtQuotes, 30000)
 fetchJSON()
+</script>
+<script>
+/* ---- QMT 策略健康横幅：status!=ok 时在页面顶部告警（数据由 qmt/check_e1_health.py 每 10 分钟生成） ---- */
+(function () {
+  var box = document.getElementById('qmtHealth')
+  if (!box) return
+  function paint(h) {
+    if (!h || !h.status || h.status === 'ok') { box.style.display = 'none'; return }
+    var isErr = h.status === 'error'
+    var color = isErr ? '#ef4444' : '#f59e0b'
+    var bg = isErr ? 'rgba(239,68,68,.13)' : 'rgba(245,158,11,.13)'
+    var msgs = (h.alerts || []).filter(function (a) { return a.level !== 'info' })
+      .map(function (a) { return a.msg }).slice(0, 4)
+    box.style.display = 'block'
+    box.style.margin = '0 0 12px'
+    box.style.border = '1px solid ' + color
+    box.style.background = bg
+    box.style.borderRadius = '10px'
+    box.style.padding = '10px 14px'
+    box.style.fontSize = '13px'
+    box.style.lineHeight = '1.65'
+    box.innerHTML =
+      '<div style="font-weight:700;color:' + color + '">QMT 策略：' + h.headline +
+      '<span style="font-weight:400;opacity:.7;margin-left:8px">检查于 ' + h.checkedAt + '</span></div>' +
+      (msgs.length ? '<div style="margin-top:4px;opacity:.92">' + msgs.join('<br>') + '</div>' : '') +
+      '<div style="margin-top:4px;opacity:.6">最后日志 ' + (h.lastLogAt || '无') +
+      '　距检查 ' + (h.lastLogAgeMin === null || h.lastLogAgeMin === undefined ? '-' : h.lastLogAgeMin) + ' 分钟' +
+      '　QMT ' + (h.qmtRunning ? '在运行' : '未运行') + '</div>'
+  }
+  function pull() {
+    fetch('./data/qmt-health.json?_=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null })
+      .then(paint).catch(function () {})
+  }
+  pull()
+  setInterval(pull, 300000)
+})()
 </script>
 </body>
 </html>
