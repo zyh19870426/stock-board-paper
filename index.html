@@ -1,0 +1,1999 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>打板模拟跟进 · 每日收益看板</title>
+<style>
+  :root{
+    --bg:#0e1420; --panel:#161e2e; --panel2:#1b2438; --line:#2a3550;
+    --tx:#dfe6f3; --tx2:#8fa0bf; --up:#f04a4a; --dn:#2fbf71;
+    --s1:#4aa3f0; --s2:#f0a04a; --accent:#4aa3f0;
+    --warn:#d97706;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--tx);font:14px/1.6 "Segoe UI","Microsoft YaHei",sans-serif;padding:16px 16px 60px}
+  a{color:inherit}
+
+  /* ============ 布局：左侧栏 + 右侧主区 ============ */
+  .layout{max-width:1320px;margin:0 auto;display:grid;grid-template-columns:236px 1fr;gap:16px;align-items:start}
+  @media(max-width:900px){.layout{grid-template-columns:1fr}}
+
+  /* ---- 侧边栏 ---- */
+  .side{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;position:sticky;top:16px}
+  .side .sh{font-size:12px;color:var(--tx2);letter-spacing:.5px;margin-bottom:8px;padding-left:2px}
+  .sitem{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:8px;cursor:pointer;border:1px solid transparent;transition:background .12s,border-color .12s;margin-bottom:4px}
+  .sitem:hover{background:var(--panel2)}
+  .sitem.on{background:var(--panel2);border-color:var(--accent)}
+  .sitem .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
+  .sitem .nm{flex:1;min-width:0}
+  .sitem .nm .n1{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sitem .nm .n2{font-size:11px;color:var(--tx2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sitem .rt{font-size:12px;font-weight:700;flex:0 0 auto;text-align:right}
+  .sitem .rt .rv{display:block;font-size:13px}
+  .sitem .rt .rd{display:block;font-size:10px;font-weight:500;opacity:.85}
+  .side .snote{font-size:10.5px;color:var(--tx2);line-height:1.5;margin-top:10px;padding-top:9px;border-top:1px solid var(--line)}
+
+  /* ---- 主区 ---- */
+  .main{min-width:0}
+  .hero{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .hero .h1{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+  .hero h1{font-size:19px;font-weight:600}
+  .hero .sub{color:var(--tx2);font-size:12px;margin-top:4px}
+
+  /* S3 体检状态条（读 data/health.json，点击进体检页） */
+  .healthbar{display:flex;align-items:center;gap:9px;margin-top:10px;background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:8px 12px;font-size:12.5px;cursor:pointer;color:var(--tx)}
+  .healthbar:hover{border-color:var(--accent)}
+  .healthbar .led{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
+  .healthbar .hbgo{margin-left:auto;color:var(--tx2);font-size:11.5px;white-space:nowrap}
+  .hero .nav{margin-top:8px;font-size:12px}
+  .hero .nav a{color:var(--accent);text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:3px 10px;display:inline-block}
+  .hero .nav a:hover{border-color:var(--accent)}
+
+  /* 核心指标卡 */
+  .kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:14px}
+  .card{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:10px 12px}
+  .card .t{font-size:11px;color:var(--tx2)}
+  .card .v{font-size:19px;font-weight:700;margin-top:2px;letter-spacing:.2px}
+  .card .m{font-size:10.5px;color:var(--tx2);margin-top:1px}
+  .up{color:var(--up)} .dn{color:var(--dn)}
+
+  #err{display:none;background:rgba(240,74,74,.1);border:1px solid rgba(240,74,74,.4);color:var(--up);border-radius:8px;padding:12px;margin:12px 0;font-size:13px}
+
+  /* 滚动验证：只作为一个小徽章挂在 M2 卡片里（不再顶部占整条）
+     ★ 2026-10-16 用户要求：「方向成立」这个提示弱化显示，作为一个标签，显示在 M2 跟随里面就行，
+       没必要显示那么多细节 ⇒ 顶部整条 #rollbar 已删除，多窗口/显著性明细不再展示。 */
+  .rolltag{display:inline-flex;align-items:center;gap:6px;padding:2px 10px;border-radius:12px;
+    font-size:11.5px;font-weight:700;white-space:nowrap;vertical-align:middle}
+  .rolltag.green{background:rgba(34,197,94,.16);color:#22c55e}
+  .rolltag.watch{background:rgba(250,204,21,.16);color:#facc15}
+  .rolltag.degrade{background:rgba(240,74,74,.16);color:var(--up)}
+  .rolltag.insufficient{background:rgba(143,160,191,.15);color:var(--tx2)}
+  .rollnote{font-size:11px;color:var(--tx2);margin-left:7px}
+
+  /* 盘中实时 */
+  .live{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:12px 0 0}
+  .live .hd{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .live .hd b{font-size:14px}
+  .badge{display:inline-block;padding:2px 10px;border-radius:12px;font-size:11.5px;font-weight:600}
+  .badge.trading{background:rgba(240,74,74,.15);color:var(--up)}
+  .badge.closed{background:rgba(143,160,191,.15);color:var(--tx2)}
+  .badge.pre-open,.badge.holiday{background:rgba(74,163,240,.12);color:var(--s1)}
+  .live .note{color:var(--tx2);font-size:11px;margin-top:3px}
+  .live .lv-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin-top:11px}
+  .live .lv{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+  .live .lv .nm{font-weight:600;margin-bottom:4px;font-size:13px}
+  .live .lv .row{font-size:12px;color:var(--tx2);margin-top:2px}
+  .live .lv .row b{color:var(--tx)}
+  .live .lv .row.prev{background:rgba(217,119,6,.10);border-left:3px solid #d97706;border-radius:0 5px 5px 0;padding:3px 8px;margin-top:4px;color:#e0a45a}
+  .live .lv .row.prev b{color:#f0b96a}
+  .pick{display:inline-block;background:rgba(192,132,252,.14);color:#c084fc;padding:1px 8px;border-radius:4px;font-size:11.5px;font-weight:600}
+  /* QMT 实盘区 · 与模拟账对比 */
+  .qmt-cmp{margin-top:11px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+  .qmt-cmp .qchd{font-weight:600;font-size:12.5px;margin-bottom:6px}
+  .qmt-cmp .crow{display:flex;gap:8px;align-items:baseline;font-size:12px;color:var(--tx2);padding:3px 0;flex-wrap:wrap;border-top:1px dashed var(--line)}
+  .qmt-cmp .crow:first-of-type{border-top:none}
+  .qmt-cmp .ck{flex:0 0 auto;min-width:84px;color:var(--tx);font-weight:600;font-size:11.5px}
+  .qmt-cmp .cv{flex:1 1 320px;word-break:break-all}
+  .qmt-cmp .cv b{color:var(--tx)}
+  .qmt-cmp .cnote{font-size:11px;color:var(--tx2);line-height:1.65;margin-top:3px;padding-left:92px}
+
+  /* 曲线区 */
+  .winbar{display:flex;gap:7px;margin:16px 0 8px;align-items:center;flex-wrap:wrap}
+  .winbar .wt{color:var(--tx2);font-size:12.5px}
+  .winbar button{background:var(--panel);border:1px solid var(--line);color:var(--tx2);padding:4px 12px;border-radius:6px;cursor:pointer;font-size:12.5px}
+  .winbar button.on{background:var(--panel2);color:var(--tx);border-color:var(--accent)}
+  /* M2 切换轨迹（折叠在详情卡片内，不再挤在曲线窗口按钮那一行） */
+  .swrow{margin-top:8px;padding-top:7px;border-top:1px dashed var(--line)}
+  .swsum{font-size:11px;color:var(--tx2);cursor:pointer;line-height:1.6}
+  .swsum b{color:var(--tx)}
+  .swsum:hover{color:var(--tx)}
+  .swsum .swmore{color:var(--accent);margin-left:4px}
+  .swfull{font-size:11px;color:var(--tx2);line-height:1.8;margin-top:5px;word-break:break-all}
+  .winbar .rt{font-size:10.5px;color:var(--tx2);cursor:help;border-bottom:1px dotted var(--tx2)}
+  .chartbox{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}
+  .chartbox .chead{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:8px}
+  .chartbox .chead .cl{font-size:12.5px;font-weight:600}
+  .chartbox .chead .cl small{color:var(--tx2);font-weight:400;margin-left:5px;font-size:11px}
+  .chartbox .chead .legend{margin-left:auto;display:flex;gap:13px;font-size:11.5px;color:var(--tx2);flex-wrap:wrap}
+  .chartbox .chead .legend i{display:inline-block;width:16px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}
+
+  /* 详情区 */
+  .stitle{margin:22px 0 8px;font-size:14.5px;font-weight:600;border-left:3px solid var(--accent);padding-left:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .stitle small{color:var(--tx2);font-weight:400;font-size:11.5px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:980px){.grid2{grid-template-columns:1fr}}
+  table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:9px;overflow:hidden;font-size:12.5px}
+  th,td{padding:6px 9px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{background:var(--panel2);color:var(--tx2);font-weight:500;font-size:11.5px}
+  td:first-child,th:first-child,td.l,th.l{text-align:left}
+  tr:last-child td{border-bottom:none}
+  .tag{display:inline-block;padding:1px 7px;border-radius:4px;font-size:11px}
+  .tag.b{background:rgba(240,74,74,.14);color:var(--up)}
+  .tag.s{background:rgba(47,191,113,.14);color:var(--dn)}
+  .tag.sk{background:rgba(143,160,191,.15);color:var(--tx2)}
+  .empty{background:var(--panel);border:1px dashed var(--line);border-radius:9px;padding:20px;text-align:center;color:var(--tx2);font-size:12.5px}
+  .planmsg{background:var(--panel);border:1px dashed var(--line);border-radius:9px;padding:14px;color:var(--tx2);font-size:12.5px;line-height:1.7}
+  /* 今日分时图卡片 */
+  .mcharts{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px}
+  /* ★ 成交明细里的分时图要「伸展开」（2026-10-17 用户要求）：用更宽的列宽，
+     桌面端一行 2 张、每张约 650px；窄屏用 min() 兜底成 1 列，不溢出。 */
+  .mcharts.wide{grid-template-columns:repeat(auto-fit,minmax(min(460px,100%),1fr));gap:12px}
+  .mcharts.wide .mchart .mch{font-size:12.5px}
+  .mchart{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:8px 9px 4px}
+  .mchart .mch{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;margin-bottom:5px;padding:0 2px}
+  .mchart .mch .mcn{font-weight:600}
+  .mchart .mch .mcc{color:var(--tx2);font-size:11px}
+  .mchart .mch .mcl{color:#c084fc;font-size:11px}
+  .mchart .mch .mcd{color:var(--tx2);font-size:11px;margin-left:auto}
+  .mchart svg{display:block}
+  .mchart .mclg{display:flex;gap:12px;font-size:10.5px;color:var(--tx2);padding:2px 2px 4px}
+  .mchart .mclg span{display:inline-flex;align-items:center;gap:4px}
+  .mchart .mclg i{display:inline-block;width:8px;height:8px;border-radius:50%}
+  /* ★ 成交明细卡片底部小字：股数 / 盈亏（2026-10-17 用户要求，表格移除后信息都收进卡片） */
+  .mchart .mcfoot{display:flex;flex-wrap:wrap;gap:3px 12px;align-items:center;font-size:10.5px;color:var(--tx2);padding:4px 2px 5px;border-top:1px dashed var(--line);margin-top:4px}
+  .mchart .mcfoot b{font-weight:600;color:var(--tx)}
+  .mchart .mnochart{color:var(--tx2);font-size:10.5px;line-height:1.7;padding:14px 6px;text-align:center;border:1px dashed var(--line);border-radius:6px;margin:4px 0 2px}
+  .foot{margin-top:24px;color:var(--tx2);font-size:11px;line-height:1.7}
+  .foot b{color:var(--tx)}
+
+  /* ============ 表格手机适配（≤760px）：表格 → 卡片堆叠 ============
+     ★ 2026-10-16 用户要求：今日持仓 / 成交明细 要符合手机屏幕宽度布局。
+     现状 th,td{white-space:nowrap} 在窄屏必然横向撑破（持仓 8 列、成交明细 9 列）。
+     方案：窄屏把每个 <tr> 变成一张独立小卡，每个 <td> 一行「字段名 : 值」。
+     字段名从 <td data-l="…"> 取（桌面端该属性无用，不影响渲染）。
+     ★ 任何 width:100% 的 table 在窄屏都靠这套兜底；不依赖 JS，纯 CSS。 */
+  @media(max-width:760px){
+    table{display:block;border:none;background:transparent;border-radius:0}
+    /* 表头行（JS 统一加了 class="thead"）在窄屏隐藏，字段名改由每格的 data-l 承担 */
+    table tr.thead{display:none}
+    table tr{display:block;background:var(--panel);border:1px solid var(--line);
+      border-radius:9px;padding:4px 2px;margin-bottom:9px}
+    table td{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;
+      border:none;padding:5px 10px;text-align:right;white-space:normal;word-break:break-word;line-height:1.5}
+    table td::before{content:attr(data-l);color:var(--tx2);font-size:11.5px;
+      flex:0 0 auto;text-align:left;font-weight:500;padding-top:1px}
+    /* 没有字段名的整格（data-l="" 或未加）→ 不显示标签，左对齐整行铺满 */
+    table td[data-l=""]::before,table td:not([data-l])::before{display:none}
+    table td[data-l=""]{justify-content:flex-start;text-align:left}
+    table td.l{text-align:right}
+  }
+
+  /* ============ 移动端抽屉（≤900px） ============
+     PC 端侧边栏是常驻 sticky；手机上那样会变成一个挡在内容前的悬浮块、且页面在它后面滚动。
+     改成标准抽屉：默认隐藏 → 点按钮从左滑出 → 选中后自动收起。
+     实现用「transform 位移 + 遮罩」而非 display，保证有滑出动画。 */
+  .menubtn,.scrim{display:none}          /* PC 端不显示 */
+  @media(max-width:900px){
+    /* 触发按钮：固定在左上角（不随内容滚动） */
+    .menubtn{
+      display:flex;align-items:center;gap:6px;position:fixed;left:12px;top:12px;z-index:60;
+      background:var(--panel2);border:1px solid var(--line);border-radius:9px;
+      padding:8px 13px;color:var(--tx);font-size:13px;font-weight:600;cursor:pointer;
+      box-shadow:0 2px 10px rgba(0,0,0,.35);
+    }
+    .menubtn:active{background:var(--panel)}
+    .menubtn .cur{color:#c084fc}
+    /* 抽屉本体：固定定位 + 从左滑入 */
+    .side{
+      position:fixed;left:0;top:0;bottom:0;z-index:70;
+      width:min(78vw,300px);border-radius:0 14px 14px 0;border-left:none;
+      padding:14px;overflow-y:auto;-webkit-overflow-scrolling:touch;
+      transform:translateX(-105%);transition:transform .22s ease;
+      box-shadow:6px 0 24px rgba(0,0,0,.45);
+    }
+    .side.open{transform:translateX(0)}
+    /* 遮罩：抽屉打开时盖住主内容，点它关闭 */
+    .scrim{
+      display:block;position:fixed;inset:0;z-index:65;background:rgba(0,0,0,.5);
+      opacity:0;pointer-events:none;transition:opacity .22s ease;
+    }
+    .scrim.open{opacity:1;pointer-events:auto}
+    /* 抽屉里给「关闭」留个明确出口 */
+    .side .sclose{display:flex;justify-content:flex-end;margin-bottom:6px}
+    .side .sclose button{background:var(--panel2);border:1px solid var(--line);color:var(--tx2);
+      border-radius:7px;padding:5px 11px;font-size:12px;cursor:pointer}
+    /* 给固定按钮让出顶部空间，避免压住标题 */
+    body{padding-top:62px}
+    .layout{gap:0}
+  }
+  /* 抽屉关闭按钮在 PC 端隐藏 */
+  .side .sclose{display:none}
+  @media(max-width:900px){ .side .sclose{display:flex} }
+</style>
+</head>
+<body>
+
+<!-- 移动端：抽屉触发按钮（PC 端隐藏）。显示当前策略，点了从左滑出策略列表 -->
+<button class="menubtn" id="menubtn" aria-label="打开策略列表">
+  <span style="font-size:15px;line-height:1">☰</span><span>策略</span><span class="cur" id="menucur">S3</span>
+</button>
+<!-- 移动端：抽屉遮罩，点它收起 -->
+<div class="scrim" id="scrim"></div>
+
+<div class="layout">
+
+  <!-- ==================== 左侧：策略侧边栏（PC 常驻 sticky / 手机抽屉） ==================== -->
+  <aside class="side" id="side">
+    <div class="sclose"><button id="sideclose">收起 ✕</button></div>
+    <div class="sh">策略列表</div>
+    <div id="sidelist"></div>
+    <div class="snote">
+      <div>点选任意策略 → 看该套详情</div>
+      <div style="margin-top:5px">看板默认停在 <b style="color:#c084fc">S3</b>（首板优化版 · 线上主策略）</div>
+      <div style="margin-top:5px">各策略独立 10 万本金、互不干扰</div>
+      <div style="margin-top:5px"><a href="./backtest.html" style="color:var(--accent)">策略回测（可改任意参数）→</a></div>
+      <div style="margin-top:5px"><a href="./plan.html" style="color:var(--accent)">改版方案 / 更新手册 →</a></div>
+      <div style="margin-top:5px"><a href="./health.html" style="color:var(--accent)">S3 体检（绩效/风格巡检）→</a></div>
+    </div>
+  </aside>
+
+  <!-- ==================== 右侧：主区 ==================== -->
+  <main class="main">
+    <div class="hero">
+      <div class="h1">
+        <h1 id="ptitle">打板模拟跟进</h1>
+        <span id="pbadge"></span>
+      </div>
+      <div class="sub" id="sub">加载中…</div>
+      <div id="err"></div>
+      <div class="kpi" id="kpi"></div>
+      <a class="healthbar" id="healthbar" href="./health.html" style="display:none">
+        <span class="led" id="hbled"></span>
+        <span id="hbtxt"></span>
+        <span class="hbgo">查看体检报告 →</span>
+      </a>
+    </div>
+
+    <div class="live" id="live" style="display:none"></div>
+
+    <!-- QMT 实盘（data/qmt-live.json，由 qmt/_snapshot_qmt.py 定时采集后推送） -->
+    <div class="live" id="qmt" style="display:none"></div>
+
+    <!-- 收益曲线 -->
+    <div class="winbar">
+      <span class="wt">收益曲线</span>
+      <button data-m="live" class="on">线上模拟</button>
+      <button data-m="replay">历史回放</button>
+      <span id="winwrap" style="display:none;gap:7px;align-items:center">
+        <button data-w="7">7天</button><button data-w="30" class="on">30天</button>
+        <button data-w="60">60天</button><button data-w="90">90天</button>
+        <button data-w="0">全部</button>
+      </span>
+    </div>
+    <div class="chartbox">
+      <div class="chead">
+        <span class="cl" id="chartTitle">累计收益率</span>
+        <span class="legend" id="legend"></span>
+      </div>
+      <svg id="chart" width="100%" height="250" preserveAspectRatio="none"></svg>
+    </div>
+
+    <!-- 详情区（随侧边栏切换） -->
+    <div id="detail"></div>
+
+    <div class="foot">
+      <b>口径</b>：T 日收盘选股 → T+1 开盘价买入（一字涨停弃买）→ <b>买入当日不可卖出（A 股 T+1），断板判定从买入次日起</b> → 断板即出（<b>14:57 判定，未封则在收盘集合竞价挂单，成交价＝收盘价</b>）/ 止损 / 回撤 / 最长 10 个交易日。<br>
+      <b>T+1 依据</b>：A 股当日买入的股票当日不可卖出，所以「断板即出」实际是 <b>T+2 起</b>每个交易日 14:57 看是否封住涨停、没封才卖 —— 回测完全按此执行（0 笔当日买卖）。<br>
+      <b>曲线口径</b>：默认画<b>线上模拟实测</b> —— 模拟账户从上线日（<span id="fStart">—</span>）起逐日累计的真实收益，一个交易日一个点，随模拟盘推进自动加长。要看这套策略历史上怎么走的，点「历史回放」切换：同参数从数据集可回测起点（<span id="fReplay">—</span>）回放至今、图上以虚线标示 —— 那是<b>回测</b>，与模拟盘不是同一件事，不要混读。<br>
+      模拟盘按开盘价 / 集合竞价价理想成交，未计滑点与冲击成本；数据由每日收盘后自动任务生成，不构成投资建议。
+    </div>
+  </main>
+</div>
+
+<script>
+'use strict'
+/* ★ CUR 初值留空：render() 会自动落到 DATA.mainId（= 线上主策略 S3）。
+   早先写死 'M2'，导致 M2 存在时永远不会被主策略覆盖，默认页停在对照策略上。 */
+var DATA = null, WIN = 30, CUR = ''   /* ★ 2026-10-20：默认 30 天窗口（仅 replay 模式生效） */
+/* ★ 2026-10-20：MODE 决定曲线数据源。'live' = 线上模拟账户（daily，上线日至今，默认）；
+   'replay' = 同参数历史回放（curve，6 年）。用户要看的是模拟盘真实收益，回测只是备查。 */
+var MODE = 'live'
+/* ★ 2026-10-20：列表与曲线都隐藏这两套（M2 = 动态跟随对照，S2 = 只买 5 板对照），
+   它们在页面上占位置但没有操作价值。数据仍留在 dashboard.json 里，随时可放出来。 */
+var HIDE = ['M2', 'S2']
+function visibleOf (S) { return (S || []).filter(function (s) { return HIDE.indexOf(s.id) < 0 }) }
+var PAL = ['#c084fc', '#4aa3f0', '#f0a04a', '#4dd0a0', '#f472b6', '#facc15', '#38bdf8', '#fb923c']
+var IDS = []
+function colorOf (id) {
+  var i = IDS.indexOf(id)
+  if (i < 0) { IDS.push(id); i = IDS.length - 1 }
+  return PAL[i % PAL.length]
+}
+var fmtYuan = c => (c<0?'-':'') + Math.abs(c/100).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2})
+var signYuan = c => (c>0?'+':'') + fmtYuan(c)
+var pct = v => (v>0?'+':'') + (v*100).toFixed(2) + '%'
+var cls = v => v>0?'up':(v<0?'dn':'')
+var price = c => (c/100).toFixed(2)
+var dnum = d => String(d==null?'':d).replace(/[^0-9]/g,'')
+var cnDate = d => { var s=dnum(d); return s.length>=8 ? s.slice(0,4)+'-'+s.slice(4,6)+'-'+s.slice(6,8) : String(d==null?'':d) }
+var mmdd = d => { var s=dnum(d); return s.length>=8 ? s.slice(4,6)+'-'+s.slice(6,8) : s }
+var LIVE = null
+/* ★ 2026-10-21 新增：浏览器直连行情（东财 JSONP）。
+   背景：云端定时器（GitHub Actions 的 schedule）对高频 cron 会直接丢触发，
+         实测 10-21 白天零触发 ⇒ 看板整天停在 20 号。
+   分工：持仓清单一天变一次，交给云端跑批；「现价 / 今日盈亏」这种秒级的东西由页面自己拉，
+         每 30 秒一次，不依赖任何 cron、不依赖本机开机。
+   诚实边界：这里只刷新【价格】，不重算当日买卖事件；「今天买了/卖了什么」仍以跑批帧为准，
+             页头会分别标出「行情时间」和「数据帧时间」。 */
+var QUOTE = { at: null, ok: 0, fail: 0 }
+var JSONP_SEQ = 0
+function bjToday(){ return new Date(Date.now() + 8*3600*1000).toISOString().slice(0,10) }
+function jsonpQuotes(codes, cb){
+  if(!codes.length){ cb(null); return }
+  var secids = codes.map(function(c){
+    return (/^(6|9)/.test(c) ? '1' : '0') + '.' + c     /* 1=沪市 0=深市/北交所 */
+  }).join(',')
+  var fn = '__emq' + (++JSONP_SEQ)
+  var s = document.createElement('script')
+  var done = false
+  function fin(v){
+    if(done) return
+    done = true
+    clearTimeout(timer)
+    try{ delete window[fn] }catch(e){ window[fn] = undefined }
+    if(s.parentNode) s.parentNode.removeChild(s)
+    cb(v)
+  }
+  var timer = setTimeout(function(){ fin(null) }, 8000)
+  window[fn] = function(r){
+    var m = {}
+    try{ ((r && r.data && r.data.diff) || []).forEach(function(x){ if(x && x.f12) m[String(x.f12)] = x }) }catch(e){}
+    fin(Object.keys(m).length ? m : null)
+  }
+  s.onerror = function(){ fin(null) }
+  s.src = 'https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&invt=2&fields=f2,f3,f12,f14,f18&secids=' + secids + '&cb=' + fn
+  document.body.appendChild(s)
+}
+/* 用实时价重算某一帧策略的 市值/当日盈亏/累计 */
+function quoteApplyTo(strategies, m, at){
+  var touched = false
+  strategies.forEach(function(s){
+    var ps = s.positions || []
+    if(!ps.length) return
+    var mv = 0
+    ps.forEach(function(p){
+      var q = m[p.code]
+      if(q && Number(q.f2) > 0){
+        p.curC = Math.round(Number(q.f2) * 100)
+        p.quoteAt = at
+        touched = true
+      }
+      var c = (p.curC || p.buyC || 0)
+      p.curPnlC = (c - (p.buyC || 0)) * (p.shares || 0)
+      mv += c * (p.shares || 0)
+    })
+    if(!touched) return
+    var prevTotal = (s.totalC || 0) - (s.dayPnlC || 0)       /* 昨收净值：帧自带，不用猜 */
+    var initTotal = (s.cumRet != null && s.cumRet > -1) ? s.totalC/(1 + s.cumRet) : 0
+    var newTotal = (s.cashC || 0) + mv
+    s.mvC = mv
+    s.totalC = newTotal
+    if(prevTotal > 0){
+      s.dayPnlC = newTotal - prevTotal
+      s.dayRet = s.dayPnlC / prevTotal
+    }
+    if(initTotal > 0) s.cumRet = newTotal/initTotal - 1
+  })
+  return touched
+}
+function applyQuotes(){
+  if(!LIVE || !LIVE.strategies || !LIVE.strategies.length) return
+  if(LIVE.phase !== 'trading') return
+  if(String(LIVE.bjDate) !== bjToday()) return                /* 帧不是今天的 ⇒ 不刷，避免用今天的价套昨天的持仓 */
+  var codes = []
+  LIVE.strategies.forEach(function(s){
+    (s.positions || []).forEach(function(p){ if(p.code && codes.indexOf(p.code) < 0) codes.push(p.code) })
+  })
+  if(!codes.length) return
+  jsonpQuotes(codes, function(m){
+    if(!m){ QUOTE.fail++; return }
+    QUOTE.fail = 0
+    var at = new Date()
+    if(!quoteApplyTo(LIVE.strategies, m, at.toISOString())) return
+    QUOTE.at = at
+    QUOTE.ok++
+    renderLive()
+    if(DATA) render(DATA)
+  })
+}
+var MCHART = null          /* 当日分时序列（data/minute-chart.json），画「今日操作股票」的分时图 */
+var MTRADE = null          /* 成交明细专用分时（data/minute-trade.json），按 code+date 精确取，回填近 20 个交易日 */
+var ISER = null            /* 盘中净值序列（data/intraday-series.json）：最近 10 个交易日、每 15 分钟一帧 */
+var AUCTION = null         /* 集合竞价对照（data/auction-log.json）：竞价参考价 → 实际成交价 */
+var IDAY = null            /* 盘中曲线当前查看的日期（默认最新一天） */
+
+/* ---------- 数据拉取 ---------- */
+/* ★ 2026-10-20：dashboard.json ≈ 700KB，网络慢时要 5~10 秒。旧版加载中无任何提示、
+   失败不重试 ⇒ 用户看到一片空白分不清「在加载」还是「坏了」。现在：加载中先在曲线区
+   显示提示，失败自动重试 3 次（间隔 2 秒），仍失败才报错。 */
+var FETCH_RETRY = 0
+function fetchJSON(){
+  var t = Date.now()
+  var chart = document.getElementById('chart')
+  if(chart && !DATA) chart.innerHTML = '<text x="50%" y="125" fill="#8fa0bf" font-size="13" text-anchor="middle">正在加载看板数据（约 700KB，网络慢时需数秒）…</text>'
+  fetch('./data/dashboard.json?_='+t).then(r=>{
+    if(!r.ok) throw new Error('HTTP '+r.status)
+    return r.json()
+  }).then(function(j){ FETCH_RETRY = 0; render(j);
+    /* ★ DATA 到位后必须重画 QMT 区块：它的「模拟侧闸门」取自 dashboard.json 的 risk.gateToday，
+       而 loadQmt 往往先于 dashboard 返回（3476 B vs 700KB）⇒ 不重画就会一直显示「无记录」。 */
+    if(QMT) renderQmt() }).catch(e=>{
+    if(FETCH_RETRY < 3){
+      FETCH_RETRY++
+      if(chart && !DATA) chart.innerHTML = '<text x="50%" y="125" fill="#e0a020" font-size="13" text-anchor="middle">数据加载失败（'+e.message+'），'+FETCH_RETRY+'/3 次重试中…</text>'
+      setTimeout(fetchJSON, 2000)
+      return
+    }
+    var el = document.getElementById('err')
+    el.style.display='block'
+    el.textContent = '数据加载失败：'+e.message+'。若是本地直接双击打开，请访问线上地址（GitHub Pages）；线上页面则等每日任务跑完后 2~3 分钟再刷新。'
+    document.getElementById('sub').textContent = '加载失败'
+  })
+}
+function loadLive(){
+  fetch('./data/intraday.json?_='+Date.now(), {cache:'no-store'}).then(r=> r.ok ? r.json() : null)
+    .then(function(j){ LIVE = j; applyQuotes(); renderLive(); if(DATA) render(DATA); if(QMT) renderQmt() }).catch(function(){ /* 保留上一次 */ })
+}
+/* ★ 盘中净值序列 + 竞价对照（2026-10-19 用户要求）
+   intraday-series.json 只增不删、保留最近 10 个交易日 ⇒ 收盘后也一直能看当日盈亏怎么变的；
+   auction-log.json 记录 09:20–09:25 竞价参考价与 09:30 后实际成交价的差额。 */
+function loadSeries(){
+  fetch('./data/intraday-series.json?_='+Date.now(), {cache:'no-store'}).then(function(r){ return r.ok ? r.json() : null })
+    .then(function(j){ ISER = j; if(DATA) renderDetail() }).catch(function(){ /* 缺失不影响看板 */ })
+  fetch('./data/auction-log.json?_='+Date.now(), {cache:'no-store'}).then(function(r){ return r.ok ? r.json() : null })
+    .then(function(j){ AUCTION = j; if(DATA) renderDetail() }).catch(function(){ /* 缺失不影响看板 */ })
+}
+/* ★ 当日分时序列（画「今日操作股票」的分时图）。
+   文件由每日收盘任务采集（lib/minute-chart.js），只留最近 8 个交易日。
+   ★ 另外加载 minute-trade.json：成交明细专用，按 (code,date) 回填近 20 个交易日，
+     使「每一笔成交」都能点开看到买入日 / 卖出日的分时与 B/S 时点。
+   加载失败/文件不存在都不影响主看板（图区自行隐藏）。 */
+function loadMinuteChart(){
+  var a = fetch('./data/minute-chart.json?_='+Date.now(), {cache:'no-store'})
+    .then(function(r){ return r.ok ? r.json() : null })
+    .then(function(j){ MCHART = (j && Array.isArray(j.rows)) ? j : null })
+    .catch(function(){ MCHART = null })
+  var b = fetch('./data/minute-trade.json?_='+Date.now(), {cache:'no-store'})
+    .then(function(r){ return r.ok ? r.json() : null })
+    .then(function(j){ MTRADE = (j && Array.isArray(j.rows)) ? j : null })
+    .catch(function(){ MTRADE = null })
+  Promise.all([a,b]).then(function(){ if(DATA) renderDetail() })
+}
+
+/* ★ 盘中实时并入：LIVE 快照比正式看板新一个交易日时，顶部数字用实时值并标 ⚡实时。
+   ★ 曲线也要追加当日实时点：否则盘中曲线停在昨日，看不出今天的变化。
+     规则 = 先剔掉 LIVE 同日的旧点（防重复计点），再追加一个 live 点；收敛后由收盘跑转正。 */
+function mergedStrategies(){
+  if(!DATA) return []
+  /* ★ 必须要求 bjDate 有效（'YYYY-MM-DD'，8 位数字）：
+     否则 String(undefined) <= String('2026-10-14') 会因 'u' > '2' 判 false ⇒ 误进合并分支，
+     给 daily 追加一个没有日期的脏点（曲线会多出一个 x 对不上的点）。 */
+  if(!LIVE || LIVE.phase==='holiday' || !LIVE.strategies || !LIVE.strategies.length) return DATA.strategies
+  if(!/^\d{8}$/.test(dnum(LIVE.bjDate))) return DATA.strategies
+  if(String(LIVE.bjDate) <= String(DATA.date)) return DATA.strategies
+  return DATA.strategies.map(function(s){
+    var lv = null
+    LIVE.strategies.forEach(function(x){ if(x.id===s.id) lv = x })
+    if(!lv) return s
+    var daily = (s.daily||[]).filter(function(p){ return p.d !== LIVE.bjDate })
+    daily = daily.concat([{ d: LIVE.bjDate, tc: lv.totalC, dp: lv.dayPnlC, dr: lv.dayRet, cr: lv.cumRet, live: 1 }])
+    return Object.assign({}, s, {
+      dayPnlC: lv.dayPnlC, dayRet: lv.dayRet, cumRet: lv.cumRet,
+      cumPnlC: lv.totalC - DATA.initialCash*100,
+      totalC: lv.totalC,
+      daily: daily,
+      positions: lv.positions || s.positions,
+      todayBuys: lv.todayBuys || [], todaySells: lv.todaySells || [],
+      live: LIVE.phase==='trading' ? 1 : 0
+    })
+  })
+}
+function liveTagOf(s){ return s && s.live ? ' ⚡实时' : '' }
+function stratById(id){ return mergedStrategies().filter(function(s){ return s.id===id })[0] || null }
+
+/* ---------- 侧边栏 ---------- */
+/* 侧边栏副标题：短名（去掉「策略N · 」前缀），M2 特殊标注 */
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') }
+function shortName(s){
+  return String(s.name||'').replace(/^策略[A-Za-z0-9]+\s*·\s*/,'').replace(/^跟随·/,'')
+}
+/* 详情/曲线标题用：去掉与 id 重复的前缀（M1 的 name 本身是「M1 · 微盘非流动性…」） */
+function displayName(s){
+  var raw = String(s.name||'')
+  if(raw.indexOf(s.id) === 0) return raw.slice(s.id.length).replace(/^\s*·\s*/,'')
+  return shortName(s)
+}
+/* ★ lbcRange 形如 "2<N<4"，裸 < 会被 HTML 当标签吞掉 ⇒ 统一转义 */
+function sideSub(s){
+  if(s.id==='M1'){
+    var R = (s.risk && s.risk.rebalanceDays) || 10
+    return '微盘 · ' + R + ' 日调仓 · ' + (s.slots || 30) + ' 只'
+  }
+  if(s.id==='M2') return '动态跟随 · 三套候选'
+  return s.lbcRange ? (esc(s.lbcRange) + ' · ' + (s.slots||'') + ' 份') : ''
+}
+function renderSide(){
+  var S = visibleOf(mergedStrategies())
+  var box = document.getElementById('sidelist')
+  box.innerHTML = S.map(function(s){
+    var c = colorOf(s.id)
+    var isMain = !s.isRef
+    /* ★ 2026-10-20：列表只显示代码（M1/S3/E1/S1），不再挂长昵称——详情区标题里有全名。 */
+    var badge = s.id === 'M1'
+      ? '<span class="tag b" style="font-size:10px;padding:0 5px;margin-right:5px">组合</span>'
+      : (isMain
+          ? '<span class="tag b" style="font-size:10px;padding:0 5px;margin-right:5px">主策略</span>'
+          : '<span class="tag sk" style="font-size:10px;padding:0 5px;margin-right:5px">对照</span>')
+    /* M1 是正式在跑的组合策略，不弱化（它与 S3/E1 是并列关系，不是「对照组」） */
+    var dim = (isMain || s.id === 'M1') ? '' : ' style="opacity:.62"'
+    return '<div class="sitem'+(s.id===CUR?' on':'')+'" data-id="'+s.id+'"'+dim+'>'
+      + '<span class="dot" style="background:'+c+'"></span>'
+      + '<span class="nm"><span class="n1">'+badge+s.id+'</span>'
+      + '<span class="n2">'+sideSub(s)+'</span></span>'
+      + '<span class="rt"><span class="rv '+cls(s.cumRet)+'">'+pct(s.cumRet)+'</span>'
+      + '<span class="rd '+cls(s.dayRet)+'">今日 '+pct(s.dayRet)+'</span></span>'
+      + '</div>'
+  }).join('')
+  box.querySelectorAll('.sitem').forEach(function(el){
+    el.onclick = function(){
+      CUR = this.dataset.id
+      var mc = document.getElementById('menucur'); if(mc) mc.textContent = CUR
+      renderSide(); renderHero(); renderLive(); renderDetail(); drawChart()
+      closeSide()          /* ★ 手机上选完自动收起抽屉，让详情立刻可见 */
+    }
+  })
+}
+
+/* ---------- 移动端抽屉开合 ----------
+ * PC 端：.side 是常驻 sticky，这些操作无副作用（class 加了也不影响 grid 布局）。
+ * 手机端：默认 transform 移出屏幕，open 才滑入；遮罩点击/选策略/按 ESC 均可关闭。 */
+function openSide(){
+  document.getElementById('side').classList.add('open')
+  document.getElementById('scrim').classList.add('open')
+  document.documentElement.style.overflow = 'hidden'   /* 抽屉打开时锁定背景滚动 */
+}
+function closeSide(){
+  document.getElementById('side').classList.remove('open')
+  document.getElementById('scrim').classList.remove('open')
+  document.documentElement.style.overflow = ''
+}
+function sideIsOpen(){ return document.getElementById('side').classList.contains('open') }
+
+/* ---------- 顶部核心指标（只显示当前选中策略，默认 M2） ---------- */
+function renderHero(){
+  var s = stratById(CUR)
+  if(!s) return
+  var c = colorOf(s.id)
+  document.getElementById('ptitle').innerHTML = '<span style="color:'+c+'">'+s.id+'</span> · '+displayName(s)
+  document.getElementById('pbadge').innerHTML = s.id==='M2'
+    ? '<span class="pick">跟随 · 近10日最强者</span>' : '<span class="pick" style="background:rgba(74,163,240,.14);color:#4aa3f0">固定参数</span>'
+  document.getElementById('sub').innerHTML =
+    '数据截至 <b>'+cnDate(DATA.date)+'</b> 收盘 · 更新于 '+new Date(DATA.updated).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'})
+    + ' · 起点 '+DATA.startDate+' · 每套策略本金 '+fmtYuan(DATA.initialCash*100)+' 元'
+    + (s.live && LIVE ? ' · <span style="color:var(--warn)">顶部数字为盘中实时预演（'+LIVE.bjTime+'），以收盘跑为准</span>' : '')
+  document.getElementById('fStart').textContent = DATA.startDate
+  document.getElementById('fReplay').textContent = DATA.replayStart || '—'
+
+  var h = ''
+  h += card('当日盈亏'+liveTagOf(s), signYuan(s.dayPnlC)+' 元', cls(s.dayPnlC), '当日收益率 '+pct(s.dayRet))
+  h += card('累计收益'+liveTagOf(s), pct(s.cumRet), cls(s.cumRet), '累计盈亏 '+signYuan(s.cumPnlC)+' 元')
+  h += card('可用持仓金额', fmtYuan(s.cashC)+' 元', '', '已用市值 '+fmtYuan(s.mvC)+' 元')
+  h += card('总资产'+liveTagOf(s), fmtYuan(s.totalC)+' 元', '', '现金＋市值')
+  h += card('胜率 / 笔数', s.tradeCount ? (s.winRate*100).toFixed(1)+'% / '+s.tradeCount+' 笔' : '—', '', '最大回撤 '+(s.maxDrawdown*100).toFixed(2)+'%')
+  document.getElementById('kpi').innerHTML = h
+}
+
+/* ---------- 当日盈亏走势（盘中快照序列，最近 10 个交易日可切换） ---------- */
+function setIDay(d){ IDAY = d; renderDetail() }
+function intradaySeriesHTML(sid){
+  if(!ISER || !ISER.days) return ''
+  var days = Object.keys(ISER.days).sort().slice(-10)
+  if(!days.length) return ''
+  if(!IDAY || !ISER.days[IDAY]) IDAY = days[days.length-1]
+  var btns = days.map(function(d){
+    return '<button onclick="setIDay(\''+d+'\')" style="margin:0 4px 4px 0;padding:3px 8px;border-radius:10px;border:1px solid '+(d===IDAY?'var(--line2,#3a3a3a)':'var(--line,#2a2a2a)')+';background:'+(d===IDAY?'var(--panel2,#1c1c1c)':'transparent')+';color:'+(d===IDAY?'var(--tx,#eee)':'var(--tx2,#999)')+';font-size:11px;cursor:pointer">'+mmdd(d)+'</button>'
+  }).join('')
+  var head = '<div class="stitle" style="font-size:13px">当日盈亏走势 · 盘中快照（'+esc(sid)+'）</div>'
+  var dobj = ISER.days[IDAY] || {}
+  var frames = (dobj.frames || []).filter(function(f){ return f.s && f.s[sid] })
+  var bar = '<div style="margin:6px 2px 8px">'+btns+'</div>'
+  if(frames.length < 2){
+    return head + bar + '<div class="empty">'+cnDate(IDAY)+' 快照不足 2 帧（09:30 起每 15 分钟一帧，收盘跑补 15:00 定格）</div>'
+  }
+  var W = 680, H = 168, PL = 50, PR = 14, PT = 14, PB = 24
+  var vals = frames.map(function(f){ return f.s[sid].dayRet || 0 })
+  var mx = Math.max.apply(null, vals.concat([0]))
+  var mn = Math.min.apply(null, vals.concat([0]))
+  if(mx === mn){ mx += 0.002; mn -= 0.002 }
+  var pad = (mx - mn) * 0.12; mx += pad; mn -= pad
+  var X = function(i){ return PL + (W - PL - PR) * (frames.length === 1 ? 0.5 : i / (frames.length - 1)) }
+  var Y = function(v){ return PT + (H - PT - PB) * (1 - (v - mn) / (mx - mn)) }
+  var col = vals[vals.length-1] >= 0 ? '#e0483f' : '#1f9d6b'
+  var dline = '', area = 'M ' + X(0) + ' ' + Y(0)
+  frames.forEach(function(f, i){
+    var v = f.s[sid].dayRet || 0
+    dline += (i ? ' L ' : 'M ') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1)
+    area += ' L ' + X(i).toFixed(1) + ' ' + Y(v).toFixed(1)
+  })
+  area += ' L ' + X(frames.length-1).toFixed(1) + ' ' + Y(0) + ' Z'
+  var g = ''
+  ;[mx, (mx+mn)/2, mn].forEach(function(v){
+    g += '<line x1="'+PL+'" y1="'+Y(v).toFixed(1)+'" x2="'+(W-PR)+'" y2="'+Y(v).toFixed(1)+'" stroke="rgba(128,128,128,.16)" stroke-width="1"/>'
+    g += '<text x="'+(PL-6)+'" y="'+(Y(v)+3.5).toFixed(1)+'" text-anchor="end" font-size="9.5" fill="rgba(150,150,150,.9)">'+(v*100).toFixed(2)+'%</text>'
+  })
+  var zero = '<line x1="'+PL+'" y1="'+Y(0).toFixed(1)+'" x2="'+(W-PR)+'" y2="'+Y(0).toFixed(1)+'" stroke="rgba(150,150,150,.55)" stroke-width="1" stroke-dasharray="4 3"/>'
+  var last = frames[frames.length-1]
+  var dot = '<circle cx="'+X(frames.length-1).toFixed(1)+'" cy="'+Y(vals[vals.length-1]).toFixed(1)+'" r="3.5" fill="'+col+'"/>'
+    + '<text x="'+(X(frames.length-1)-4).toFixed(1)+'" y="'+(Y(vals[vals.length-1])-8).toFixed(1)+'" text-anchor="end" font-size="11" font-weight="600" fill="'+col+'">'+pct(vals[vals.length-1])+'</text>'
+  var ticks = [0, Math.floor((frames.length-1)/2), frames.length-1].map(function(i){
+    return '<text x="'+X(i).toFixed(1)+'" y="'+(H-6)+'" text-anchor="'+(i===0?'start':(i===frames.length-1?'end':'middle'))+'" font-size="9.5" fill="rgba(150,150,150,.9)">'+frames[i].t+'</text>'
+  }).join('')
+  var svg = '<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="168" preserveAspectRatio="none" style="display:block">'
+    + g + '<path d="'+area+'" fill="'+col+'" opacity=".10"/>' + zero
+    + '<path d="'+dline+'" fill="none" stroke="'+col+'" stroke-width="1.8"/>' + dot + ticks + '</svg>'
+  var hi = Math.max.apply(null, vals), lo = Math.min.apply(null, vals)
+  var foot = '<div style="color:var(--tx2);font-size:11px;margin:6px 2px 0">'+cnDate(IDAY)
+    + ' · 共 '+frames.length+' 帧 · 最新 '+last.t+' <b class="'+cls(vals[vals.length-1])+'">'+pct(vals[vals.length-1])+'</b>'
+    + '　日内最高 <b class="'+cls(hi)+'">'+pct(hi)+'</b>　最低 <b class="'+cls(lo)+'">'+pct(lo)+'</b>'
+    + '　（数值=当日收益率，含持仓浮动盈亏；盘中为预演，收盘跑转正）</div>'
+  return head + bar + '<div style="background:var(--panel,#141414);border:1px solid var(--line,#2a2a2a);border-radius:10px;padding:8px 6px 2px">'+svg+'</div>' + foot
+}
+
+/* ---------- 样本外战绩（永久台账统计） ---------- */
+function liveStatsHTML(s){
+  var st = s.liveStats
+  if(!st || !st.n) return ''
+  var months = st.byMonth ? Object.keys(st.byMonth).sort().slice(-6) : []
+  var mrow = months.map(function(m){
+    var o = st.byMonth[m]
+    return '<tr><td class="l" data-l="月份">'+m+'</td><td data-l="笔数">'+o.n+'</td>'
+      + '<td data-l="胜率">'+((o.winRate||0)*100).toFixed(0)+'%</td>'
+      + '<td data-l="平均">'+((o.avgPct||0)*100).toFixed(2)+'%</td>'
+      + '<td data-l="盈亏">'+signYuan(o.sumPnlC)+'</td></tr>'
+  }).join('')
+  var warn = st.n < 30 ? '<span style="color:var(--warn)">样本仅 '+st.n+' 笔 —— 只作记录，不能当胜率结论</span>' : '样本 '+st.n+' 笔'
+  return '<div class="stitle" style="font-size:13px">样本外战绩 · 永久台账（'+warn+'）</div>'
+    + '<table><tr class="thead"><th class="l">口径</th><th>笔数</th><th>胜率</th><th>平均单笔</th><th>中位单笔</th><th>累计盈亏</th></tr>'
+    + '<tr><td class="l" data-l="口径">全部已平仓</td><td data-l="笔数">'+st.n+'</td>'
+    + '<td data-l="胜率">'+((st.winRate||0)*100).toFixed(1)+'%</td>'
+    + '<td data-l="平均单笔"><span class="'+cls(st.avgPnlPct)+'">'+((st.avgPnlPct||0)*100).toFixed(2)+'%</span></td>'
+    + '<td data-l="中位单笔"><span class="'+cls(st.medPnlPct)+'">'+((st.medPnlPct||0)*100).toFixed(2)+'%</span></td>'
+    + '<td data-l="累计盈亏"><span class="'+cls(st.sumPnlC)+'">'+signYuan(st.sumPnlC)+' 元</span></td></tr></table>'
+    + (mrow ? '<table style="margin-top:6px"><tr class="thead"><th class="l">月份</th><th>笔数</th><th>胜率</th><th>平均</th><th>盈亏</th></tr>'+mrow+'</table>' : '')
+    + '<div style="color:var(--tx2);font-size:11px;margin:6px 2px 0">数据来自 data/trades-ledger.json（只增不删）。'
+    + '台账与每日信号 data/signal-ledger.json 一起，用于样本外胜率回测：真实成交看这里，选股命中看信号台账。</div>'
+}
+
+/* ---------- 集合竞价对照：竞价参考价 → 实际成交价 ---------- */
+function aucOf(date, code, side){
+  if(!AUCTION || !AUCTION.days || !AUCTION.days[date]) return null
+  var arr = AUCTION.days[date].items || []
+  for(var i=0;i<arr.length;i++){ if(arr[i].code===code && arr[i].side===side) return arr[i] }
+  return null
+}
+function aucDiffTxt(it){
+  if(!it || it.diffPct == null) return ''
+  return '　<span style="color:var(--tx2);font-size:11px">竞价 '+price(it.auctionC)+' → '+price(it.actualC)
+    + ' <b class="'+cls(it.diffPct)+'">'+(it.diffPct>0?'+':'')+(it.diffPct*100).toFixed(2)+'%</b></span>'
+}
+function auctionRowsHTML(sid){
+  if(!AUCTION || !AUCTION.days) return ''
+  var dates = Object.keys(AUCTION.days).sort().slice(-10).reverse()
+  if(!dates.length) return ''
+  var pick = dates[0]
+  /* 优先当前查看日期，没有则取最新 */
+  if(IDAY && AUCTION.days[IDAY]) pick = IDAY
+  var day = AUCTION.days[pick] || {}
+  var items = day.items || []
+  if(!items.length) return ''
+  var rows = items.map(function(x){
+    var diff = x.diffPct
+    var diffTxt = diff == null ? '<span style="color:var(--tx2)">待成交</span>'
+      : '<span class="'+cls(diff)+'">'+(diff>0?'+':'')+(diff*100).toFixed(2)+'%</span>'
+    return '<tr><td class="l" data-l="类型">'+(x.side==='buy'?'买入':'卖出')+'</td>'
+      + '<td class="l" data-l="股票">'+esc(x.name)+'（'+x.code+'）</td>'
+      + '<td data-l="竞价">'+(x.auctionC?price(x.auctionC):'—')+'</td>'
+      + '<td data-l="实际">'+(x.actualC?price(x.actualC):'—')+'</td>'
+      + '<td data-l="差额">'+diffTxt+'</td></tr>'
+  }).join('')
+  return '<div class="stitle" style="font-size:13px">集合竞价对照 · '+cnDate(pick)+'</div>'
+    + '<table><tr class="thead"><th class="l">类型</th><th class="l">股票</th><th>竞价参考价</th><th>实际成交价</th><th>差额</th></tr>'+rows+'</table>'
+    + '<div style="color:var(--tx2);font-size:11px;margin:6px 2px 0">采集于 '+esc(day.capturedAt||'—')
+    + '（09:20–09:25 竞价窗口）。买入差额 = 竞价 → 09:30 开盘价，是真正的集合竞价滑点；卖出差额 = 竞价 → 尾盘成交价，含全天涨跌，不是滑点。</div>'
+}
+
+/* ---------- 详情区：持仓 / 当日盈亏 / 累计 / 可用金额 / 明日买入计划 ---------- */
+/* ★ M1 专属：把策略逻辑写在详情页（2026-10-20 用户要求）。
+   每一条都对应 lib/generic2.js 的实际实现，改参数时这里要同步改：
+   选股池 = scoreUniverse 里的过滤；打分 = spec 权重；建仓 = topN/buffer；
+   闸门 = timingOK(breadth)；成交 = 次日开盘 + 涨停弃买/跌停弃卖；成本 = FEES。 */
+function m1LogicHTML(s){
+  var rk = s.risk || {}
+  var topN = rk.topN || 30
+  var R = rk.rebalanceDays || 10
+  var keep = Math.round(topN * (rk.buffer || 1.5))
+  var held = (s.positions || []).length
+  var st = held ? ('当前持有 <b>' + held + '</b> 只') : '当前空仓'
+  if(!held && rk.gateToday === false) st += '（宽度闸门未开，不建仓）'
+  if(rk.nextRebalanceInDays != null) st += '　·　距下次调仓 <b>' + rk.nextRebalanceInDays + '</b> 个交易日'
+  function row(k, v){
+    return '<tr><td class="l" style="white-space:nowrap;color:var(--tx2);width:88px;vertical-align:top">'+k+'</td>'
+      + '<td class="l" style="vertical-align:top">'+v+'</td></tr>'
+  }
+  return '<div class="cards" style="display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:12px"><div class="card" style="background:var(--panel)">'
+    + '<div class="t">策略逻辑 · 它在做什么</div>'
+    + '<div class="m" style="line-height:1.8;margin-bottom:4px">'
+    + '不做打板。每到调仓日横扫全市场，买<b>最难交易、最没人要</b>的那批微盘股（流动性溢价），'
+    + '按分数取前 <b>'+topN+'</b> 只等权持有，每 <b>'+R+'</b> 个交易日重排一次。'
+    + '</div>'
+    + '<table>'
+    + row('① 选股池', 'T 日收盘<b>同时</b>满足：上市满 130 个交易日 · 股价 ≥ 2.00 元 · 当日成交额 ≥ 1000 万元 · 名称不含「退」（<b>不剔除 ST</b>）。合格票不足 200 只则本轮不调仓。')
+    + row('② 打分', '<b>［ z(流动性差) − 0.5 × z(20 日涨停次数) ］ ÷ 1.5</b><br>'
+        + '流动性差 = 20 日平均「|当日涨跌幅| ÷ 当日成交额」再取对数 —— 同样的涨跌，成交额越小分越高（越难买进卖出）。<br>'
+        + '涨停次数取<b>负</b>权重：近 20 日涨停过的票扣分，主动避开（买不进、且已透支）。<br>'
+        + 'z = 当日合格池内标准化并截断在 ±3，权重绝对值和 1.5 用于归一。')
+    + row('③ 建仓', '分数降序从头买，买满 <b>'+topN+'</b> 只等权（每只约 1/'+topN+' 仓位）。'
+        + '已持有的票只要还排在前 <b>'+keep+'</b> 名（'+topN+'×1.5 缓冲）就继续拿，掉出去才换 —— 这是换手率的主要闸口。')
+    + row('④ 择时闸门', '唯一择时：全市场「上涨家数占比」的 <b>10 日均值 > 50%</b> 才允许调仓。'
+        + '不满足就<b>既不买也不卖</b>：空仓的继续空仓，持仓的继续持有。')
+    + row('⑤ 成交时点', 'T 日收盘打分 → <b>T+1 开盘价</b>成交。'
+        + '开盘一字涨停买不进（直接跳过）、一字跌停卖不出（留到下次）。'
+        + '每只预算 = 可用现金 ÷ min(剩余名额, 剩余候选数)，按 100 股取整。')
+    + row('⑥ 成本', '佣金 0.025%（最低 5 元）+ 印花税 0.05%（仅卖出）+ 过户费 0.001%，已计入净值。')
+    + row('⑦ 风控', '无止损、无回撤熔断。风险靠「分散在 '+topN+' 只小票」+「宽度闸门」两层控制 —— '
+        + '这也是它与打板策略（S3/E1）收益相关性接近 0、适合各配一半的原因。')
+    + '</table>'
+    + '<div class="m" style="margin-top:8px;color:var(--tx2)">当前状态：'+st+'</div>'
+    + '</div></div>'
+}
+
+/* ============================================================
+ *  ★ 今日为什么没买 / 明日计划（2026-10-21 新增）
+ *  E1 的规则链是单向的，「不买」必然来自下面几个原因之一，顺序 = 实际拦截顺序：
+ *    ① 回撤熔断停手期       ② 情绪闸门（决策日收盘再封率超 250 日 80 分位）⇒ 当晚不选股
+ *    ③ 名额已满（持仓 ≥ slots）  ④ 无合格候选（首板/成交额/量比/排机构 全过滤后为空）
+ *    ⑤ 有候选但买不进（一字/涨停开盘）或未到 09:30~09:35 窗口
+ *  时序纪律：决策发生在「上一交易日收盘」，执行在「次日开盘」。
+ *    盘中 DATA.date 就是昨天 ⇒ risk.gateToday 正是「今天为什么不买」的直接原因；
+ *    收盘后 dashboard 已更新到当天 ⇒ 同一字段变成「明天买不买」。
+ *  数据源：dashboard.json 的 risk.gateInfo / positions / nextCandidates，
+ *          加 intraday.json 的 todayBuys / skippedToday。老数据缺字段时降级显示，不报错。
+ * ============================================================ */
+function whyNoBuyHTML(s){
+  var rk = s.risk || {}
+  var lv = null
+  if(LIVE && LIVE.strategies) LIVE.strategies.forEach(function(x){ if(x.id === s.id) lv = x })
+  var bj = (LIVE && LIVE.bjDate) || ''
+  var decDate = s.date || DATA.date || ''
+  var afterClose = !!(bj && decDate === bj)
+  var phase = (LIVE && LIVE.phase) || 'closed'
+  var slots = rk.slots || 1
+  var pos = s.positions || []
+  var buys = (((lv && lv.todayBuys) || s.todayBuys) || []).filter(function(b){ return b.preview !== true })
+  var sk = (lv && lv.skippedToday) || []
+  var cands = ((lv && lv.nextCandidates) || s.nextCandidates) || []
+  var gi = rk.gateInfo || null
+  var gateHit = !!rk.gateToday
+  var ddPause = !!rk.ddPauseToday
+  var posN = pos.length, freeN = Math.max(0, slots - posN)
+  var C_OK = 'var(--s1)', C_STOP = 'var(--warn)', C_NA = 'var(--tx2)'
+  var rows = [], firstStop = null
+  function add(icon, color, label, txt){
+    rows.push('<div style="display:flex;gap:8px;align-items:flex-start;margin-top:5px;font-size:12.5px">'
+      + '<span style="flex:0 0 14px;color:' + color + ';font-weight:700">' + icon + '</span>'
+      + '<span style="flex:0 0 76px;color:' + C_NA + '">' + label + '</span>'
+      + '<span style="flex:1;min-width:0;color:var(--tx)">' + txt + '</span></div>')
+  }
+  function stop(label, txt){ if(!firstStop) firstStop = { label: label, txt: txt } }
+
+  /* ① 闸门 */
+  if(gi){
+    var d = (gi.cur * 100).toFixed(2) + '%', th = (gi.thr * 100).toFixed(2) + '%'
+    var pq = gi.pct == null ? '' : '，当日处 ' + (gi.pct * 100).toFixed(1) + ' 分位'
+    if(gi.hit){
+      add('✗', C_STOP, '情绪闸门', '关闭　再封率 <b>' + d + '</b> &gt; 近 ' + gi.n + ' 日 ' + Math.round((gi.q || .8) * 100) + '% 分位 <b>' + th + '</b>'
+        + pq + ' ⇒ <b>当晚不选股，次日不开新仓</b>')
+      stop('情绪闸门关闭', '再封率 ' + d + ' 超阈值 ' + th + pq + '，当晚未选股')
+    } else {
+      add('✓', C_OK, '情绪闸门', '开放　再封率 ' + d + ' ≤ 阈值 ' + th + pq)
+    }
+  } else if(rk.gatedDays != null){
+    if(gateHit){
+      add('✗', C_STOP, '情绪闸门', '关闭（再封率超 250 日 80 分位）⇒ 当晚不选股，次日不开新仓')
+      stop('情绪闸门关闭', '再封率超近 250 日 80 分位，当晚未选股')
+    } else {
+      add('✓', C_OK, '情绪闸门', '开放（无明细字段，等待下一次 dashboard 构建后显示具体数值）')
+    }
+  } else {
+    add('–', C_NA, '情绪闸门', '本策略未启用')
+  }
+
+  /* ② 回撤熔断 */
+  if(ddPause){
+    add('✗', C_STOP, '回撤熔断', '停手中，还剩 ' + (rk.ddPauseLeft || 0) + ' 个交易日不开新仓')
+    stop('回撤熔断停手', '还剩 ' + (rk.ddPauseLeft || 0) + ' 个交易日')
+  } else if(rk.ddTriggerCount > 0){
+    add('✓', C_OK, '回撤熔断', '未停手（历史触发 ' + rk.ddTriggerCount + ' 次，当前不在停手期）')
+  } else {
+    add('–', C_NA, '回撤熔断', '现役未启用（ddStop=null，2026-10-21 复核后停用）')
+  }
+
+  /* ③ 名额 */
+  var posTxt = posN ? pos.map(function(p){ return p.name + '(' + p.code + ')' }).join('、') : '空仓'
+  if(freeN <= 0){
+    add('✗', C_STOP, '空余名额', '0 / ' + slots + '　名额已满：' + posTxt + ' ⇒ 即使有候选也不买')
+    stop('名额已满', slots + ' 个名额全被占（' + posTxt + '）')
+  } else {
+    add('✓', C_OK, '空余名额', freeN + ' / ' + slots + '　持有：' + posTxt)
+  }
+
+  /* ④ 候选 */
+  if(cands.length){
+    add('✓', C_OK, '候选(' + decDate + ')', '<b>' + cands.length + ' 只</b>：'
+      + cands.slice(0, 5).map(function(c){ return c.name + '(' + c.code + ')' }).join('、')
+      + (cands.length > 5 ? ' 等' : ''))
+  } else if(gateHit || ddPause){
+    add('✗', C_STOP, '候选(' + decDate + ')', '0 只 —— 被上面那道闸门拦下，<b>根本没有进入选股</b>（不是选不出，是没选）')
+  } else {
+    add('✗', C_STOP, '候选(' + decDate + ')', '0 只 —— 当日无合格首板：首板 + 成交额 ≥ 2000 万 + 量比 ≥ 1.5 + 排龙虎榜机构，四条全过滤后为空')
+    stop('当日无合格候选', '首板/成交额/量比/排机构 四条过滤后为空')
+  }
+
+  /* ⑤ 执行（只在当日有意义） */
+  if(!afterClose){
+    if(buys.length){
+      add('✓', C_OK, '执行', '已买入 ' + buys.length + ' 只：'
+        + buys.map(function(b){ return b.name + ' ' + b.shares + ' 股 @ ' + price(b.buyC) }).join('、'))
+    } else if(sk.length){
+      add('✗', C_STOP, '执行', '有候选但买不进：' + sk.map(function(x){ return x.name + '（' + x.reason + '）' }).join('、'))
+      stop('开盘买不进', sk.map(function(x){ return x.name + '：' + x.reason }).join('；'))
+    } else if(phase === 'pre-open'){
+      add('⏳', C_NA, '执行', '未到 09:30 开盘（只挂 09:30~09:35 的买入窗口）')
+    } else if(phase === 'auction'){
+      add('⏳', C_NA, '执行', '集合竞价中，09:30 出今开后按开盘价买入')
+    } else if(freeN > 0 && cands.length){
+      add('⏳', C_NA, '执行', '在买入窗口内，等开盘价确认（若一字涨停则买不进）')
+    }
+  }
+
+  /* 结论行 */
+  var concl, ccol
+  if(afterClose){
+    if(buys.length){ concl = '今日已买入 ' + buys.length + ' 只'; ccol = C_OK }
+    else if(firstStop){ concl = '下一个交易日不买入 —— ' + firstStop.label; ccol = C_STOP }
+    else { concl = '下一个交易日按候选开盘买入'; ccol = C_OK }
+  } else {
+    if(buys.length){ concl = '今日已买入 ' + buys.length + ' 只'; ccol = C_OK }
+    else if(firstStop){ concl = '今日不买入 —— ' + firstStop.label; ccol = C_STOP }
+    else if(posN >= slots){ concl = '今日不买入 —— 名额已满'; ccol = C_STOP }
+    else { concl = '今日无买入动作（规则未触发）'; ccol = C_NA }
+  }
+  var h = '<div style="background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:11px 13px;margin-bottom:12px">'
+    + '<div style="font-size:11px;color:var(--tx2);display:flex;gap:8px;flex-wrap:wrap;align-items:baseline">'
+      + '<span>' + (afterClose ? '明日买入计划' : '今日为什么不买') + '　·　依据 ' + esc(decDate) + ' 收盘</span>'
+      + (bj ? '<span style="opacity:.75">页面日期 ' + esc(bj) + ' · ' + esc(phase) + '</span>' : '')
+    + '</div>'
+    + '<div style="margin-top:5px;font-size:14px;font-weight:600;color:' + ccol + '">' + concl
+      + (firstStop ? '<span style="font-weight:400;font-size:12px;color:var(--tx2)">　' + firstStop.txt + '</span>' : '') + '</div>'
+    + rows.join('')
+    + '<div style="font-size:10.5px;color:var(--tx2);margin-top:7px;border-top:1px solid var(--line);padding-top:6px">'
+      + '判定顺序＝实际拦截顺序。闸门关闭时「候选 0 只」是结果不是原因 —— 闸门关 ⇒ 当晚不选股 ⇒ 次日自然没有可买的票。'
+    + '</div></div>'
+  return h
+}
+
+function renderDetail(){
+  var s = stratById(CUR)
+  if(!s){ document.getElementById('detail').innerHTML=''; return }
+  var c = colorOf(s.id)
+  var refTag = s.id === 'M1'
+    ? '<span class="tag b" style="font-size:10px;padding:0 5px;margin-left:6px">组合引擎</span>'
+    : (s.isRef ? '<span class="tag sk" style="font-size:10px;padding:0 5px;margin-left:6px">对照组 · 不作为操作依据</span>' : '<span class="tag b" style="font-size:10px;padding:0 5px;margin-left:6px">主策略</span>')
+  var h = '<div class="stitle" style="border-color:'+c+'">'+s.id+' · '+displayName(s)+' 详情'
+    + refTag
+    + '<small>'+esc(s.brief)+'</small></div>'
+
+  /* M1 专属：策略逻辑卡片（放在最前，先解释再给数字） */
+  if(s.id === 'M1') h += m1LogicHTML(s)
+
+  /* M2 专属：今日跟随谁 + 依据（切换轨迹折叠在卡片内）
+     ★ 「方向成立」等滚动验证状态已弱化为这个小卡片里的一个徽章（顶部整条已撤）。 */
+  if(s.m2){
+    h += '<div class="cards" style="display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:12px"><div class="card" style="background:var(--panel)">'
+      + '<div class="t">今日跟随</div>'
+      + '<div class="v"><span class="pick">'+s.m2.pickToday.name+'</span>'+rollTagHTML(DATA)+'</div>'
+      + '<div class="m">' + s.m2.trace.map(function(x){ return x.name+' 近10日 <span class="'+cls(x.ret)+'">'+(x.ret==null?'—':pct(x.ret))+'</span>' }).join('　·　')
+      + '　→ 取最强</div>'
+      + '<div class="m" style="margin-top:3px">'+s.m2.ref+'</div>'
+      + switchInfoHTML()
+      + '</div></div>'
+  }
+
+  /* ★ M1 的节奏卡片（它没有止损/熔断/份数概念，套用下面的打板模板会显示 null/undefined） */
+  if(s.id === 'M1'){
+    var rkm = s.risk || {}
+    var perM = Math.round(s.totalC / (rkm.topN || 30) / 100)
+    var gateTag = rkm.gateToday === false
+      ? '<span class="tag sk">🚫 宽度闸门关闭 → 本次不调仓</span>'
+      : '<span class="tag b">✅ 宽度闸门开放</span>'
+    h += '<div class="cards" style="display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:12px"><div class="card" style="background:var(--panel)">'
+      + '<div class="t">节奏与闸门</div>'
+      + '<div class="m">' + gateTag
+        + '<span style="color:var(--tx2);font-size:11px">　每 ' + (rkm.rebalanceDays || 10) + ' 个交易日调仓 · 目标 ' + (rkm.topN || 30) + ' 只等权</span></div>'
+      + '<div class="m" style="margin-top:3px">'
+        + (rkm.nextRebalanceInDays != null
+            ? ('距下次调仓 <b>' + rkm.nextRebalanceInDays + '</b> 个交易日' + (rkm.nextRebalanceDate ? '（' + rkm.nextRebalanceDate + '）' : ''))
+            : '下次调仓日：随窗口推进自动给出')
+        + '</div>'
+      + '<div class="m" style="margin-top:3px">每只约 <b>' + perM.toLocaleString() + ' 元</b>（总资产 ÷ ' + (rkm.topN || 30) + ' 只）'
+        + '　·　无止损、无回撤熔断，清仓只靠宽度闸门</div>'
+      + '</div></div>'
+  }
+
+  /* ★ 今日决策 / 为什么没买（2026-10-21 用户要求：不买的时候要看得到原因） */
+  if(s.risk && s.id !== 'M1') h += whyNoBuyHTML(s)
+
+  /* ★ 风控状态（人为跟随专用）：情绪闸门 / 回撤熔断 / 止损线 / 每份金额
+     数据来自 dashboard.json 的 risk 字段，由 lib/sim.js 每套策略统一输出。
+     ★ M1 走上面那张卡，不进这里（它的 risk 字段没有 stopLossPct/trailPct）。 */
+  if(s.risk && s.id !== 'M1'){
+    var rk = s.risk
+    var perSlot = Math.round(s.totalC / (rk.slots || 1) / 100)
+    var gateHTML = rk.gatedDays
+      ? (rk.gateToday
+          ? '<span class="tag sk">🚫 今日过热 → 明日不开新仓</span>'
+          : '<span class="tag b">✅ 今日正常，可开新仓</span>')
+        + '<span style="color:var(--tx2);font-size:11px">　自上线以来累计拦截 ' + rk.gatedDays + ' 个交易日</span>'
+      : '<span style="color:var(--tx2);font-size:11px">本策略未启用情绪闸门</span>'
+    var ddHTML = (rk.ddTriggerCount || rk.ddPauseToday)
+      ? (rk.ddPauseToday
+          ? '<span class="tag sk">⏸ 回撤熔断中：还剩 ' + rk.ddPauseLeft + ' 个交易日不开新仓</span>'
+          : '<span class="tag b">✅ 未停手</span>')
+        + '<span style="color:var(--tx2);font-size:11px">　历史触发 ' + rk.ddTriggerCount + ' 次</span>'
+      : '<span class="tag b">✅ 未停手</span><span style="color:var(--tx2);font-size:11px">　本策略未启用回撤熔断</span>'
+    h += '<div class="cards" style="display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:12px"><div class="card" style="background:var(--panel)">'
+      + '<div class="t">风控状态 · 人为跟随</div>'
+      + '<div class="m">' + gateHTML + '</div>'
+      + '<div class="m" style="margin-top:3px">' + ddHTML + '</div>'
+      + '<div class="m" style="margin-top:3px">每份约 <b>' + perSlot.toLocaleString() + ' 元</b>（总资产 ÷ ' + rk.slots + ' 份）'
+        + '　·　止损 ' + rk.stopLossPct + '%（买入价 ×' + (1 - rk.stopLossPct / 100).toFixed(2) + '）'
+        + '　·　移动回撤线 ' + rk.trailPct + '%　·　最长持有 ' + rk.maxHoldDays + ' 个交易日</div>'
+      + '</div></div>'
+  }
+
+  /* 当日盈亏走势（盘中快照序列） */
+  var ish = intradaySeriesHTML(s.id)
+  if(ish) h += '<div style="margin:14px 0 4px">'+ish+'</div>'
+
+  /* 样本外战绩（永久台账统计） */
+  var lsh = liveStatsHTML(s)
+  if(lsh) h += '<div style="margin:14px 0 4px">'+lsh+'</div>'
+
+  /* 今日持仓 */
+  h += '<div class="stitle" style="border-color:'+c+';font-size:13px">今日持仓'+(s.positions&&s.positions.length?'（'+s.positions.length+' 只）':'')+'</div>'
+  if(s.positions && s.positions.length){
+    if(s.id === 'M1'){
+      /* M1 没有「板」和「止损价」这两列 —— 它是组合持仓，止损靠调仓换出，不靠价格线 */
+      h += '<table><tr class="thead"><th class="l">代码</th><th class="l">名称</th><th>股数</th><th>成本价</th><th>现价</th><th>市值</th><th>浮动盈亏</th><th class="l">买入日</th><th>持有</th></tr>'
+        + s.positions.map(function(p){
+            var curC = p.curC != null ? p.curC : p.buyC
+            var mvC = curC * p.shares
+            var pnlC = (curC - p.buyC) * p.shares
+            var hold = p.buyDate ? '—' : '—'
+            return '<tr><td class="l" data-l="代码">'+p.code+'</td><td class="l" data-l="名称">'+p.name+'</td>'
+              +'<td data-l="股数">'+p.shares+'</td><td data-l="成本价">'+price(p.buyC)+'</td>'
+              +'<td data-l="现价">'+price(curC)+'</td><td data-l="市值">'+fmtYuan(mvC)+' 元</td>'
+              +'<td data-l="浮动盈亏"><span class="'+cls(pnlC)+'">'+signYuan(pnlC)+' 元</span>'
+              +'<span style="color:var(--tx2);font-size:11px">（'+pct(p.buyC>0?curC/p.buyC-1:0)+'）</span></td>'
+              +'<td class="l" data-l="买入日">'+(p.buyDate||'—')+'</td><td data-l="持有">'+hold+'</td></tr>'
+          }).join('') + '</table>'
+    }else{
+    h += '<table><tr class="thead"><th class="l">代码</th><th class="l">名称</th><th>板</th><th>股数</th><th>买入价</th><th>现价</th><th>止损价</th><th>浮动盈亏</th><th class="l">状态</th></tr>'
+      + s.positions.map(function(p){
+          /* 止损价 = 买入价 ×（1 − 止损%）；人为跟随时跌破即走 */
+          var slPct = (s.risk && s.risk.stopLossPct != null) ? s.risk.stopLossPct : 20
+          var slC = price(Math.round(p.buyC * (1 - slPct / 100)))
+          var cur = p.curC!=null ? price(p.curC) : '—'
+          var pnl = p.curPnlC!=null ? '<span class="'+cls(p.curPnlC)+'">'+signYuan(p.curPnlC)+' 元</span>' : '<span style="color:var(--tx2)">—</span>'
+          /* ★ data-l 供窄屏卡片布局当字段名（桌面端不用，不影响渲染） */
+          return '<tr><td class="l" data-l="代码">'+p.code+'</td><td class="l" data-l="名称">'+p.name+'</td><td data-l="板">'+p.lbc+'</td><td data-l="股数">'+p.shares+'</td>'
+            +'<td data-l="买入价">'+price(p.buyC)+'</td><td data-l="现价">'+cur+'</td><td data-l="止损价" style="color:var(--tx2)">'+slC+'</td><td data-l="浮动盈亏">'+pnl+'</td>'
+            +'<td class="l" data-l="状态">'+(p.ztNow?'<span class="tag b">🔒 涨停中</span>':'<span class="tag sk">持有中</span>')+'（'+p.buyDate+' 买入）</td></tr>'
+        }).join('') + '</table>'
+    }
+  } else {
+    h += '<div class="empty">当前空仓'+(s.m2&&s.m2.pickToday.pause?'（今日判定空仓）':(s.id==='M1'?'（宽度闸门未开放，等下一个调仓日）':''))+'</div>'
+  }
+
+  h += '<div class="grid2" style="margin-top:14px">'
+
+  /* 今日成交（含盘中预演） */
+  var lvS = null
+  if(LIVE && LIVE.strategies) LIVE.strategies.forEach(function(x){ if(x.id===s.id) lvS = x })
+  var buys = (lvS && lvS.todayBuys && lvS.todayBuys.length) ? lvS.todayBuys : (s.todayBuys||[])
+  var sells = (lvS && lvS.todaySells && lvS.todaySells.length) ? lvS.todaySells : (s.todaySells||[])
+  var colA = '<table><tr class="thead"><th class="l">今日操作</th></tr>'
+  var aucDate = (LIVE && LIVE.bjDate) ? LIVE.bjDate : s.date
+  if(buys.length){
+    colA += buys.map(function(b){
+      return '<tr><td class="l" data-l=""><span class="tag b">买入</span> '+b.name+'（'+b.code+'）'+b.lbc+' 板 '+b.shares+' 股 @ '+price(b.buyC)+'（开盘成交）'
+        + aucDiffTxt(aucOf(aucDate, b.code, 'buy')) + '</td></tr>'
+    }).join('')
+  }
+  if(sells.length){
+    colA += sells.map(function(t){
+      var isPrev = t.preview === true || /^【预演/.test(t.reason || '')
+      var head = isPrev ? '<span class="tag" style="background:rgba(217,119,6,.16);color:#e0a45a">⏳ 预演卖出（未成交）</span>' : '<span class="tag s">卖出</span>'
+      return '<tr><td class="l" data-l="">'+head+' '+t.name+'（'+t.code+'）@ '+price(t.sellC)
+        +' <span class="'+cls(t.pnlC)+'">'+signYuan(t.pnlC)+'（'+pct(t.pnlPct)+'）</span><br><span style="color:var(--tx2);font-size:11px">'+t.reason+'</span></td></tr>'
+    }).join('')
+  }
+  if(!buys.length && !sells.length) colA += '<tr><td class="l" data-l="" style="color:var(--tx2)">今日暂无成交</td></tr>'
+  colA += '</table>'
+
+  /* 明日买入计划（收盘后判断显示）
+     ★ 2026-10-19 用户要求：即便没有足够金额购买，也要显示现实。
+     旧版只列「排进空位的 1~2 只」，满仓时直接空 ⇒ 看不出今天其实选出了票。
+     现在列全部候选（最多 8 只），每只标参考价、预计能买几手、为什么不会买。 */
+  var closed = !LIVE || LIVE.phase!=='trading'
+  var colB = '<table><tr class="thead"><th class="l">明日买入计划（全部候选）'+(s.lbcPending?'　<span style="color:var(--warn);font-size:11px">⚡临时 · 未排机构</span>':'')+'</th></tr>'
+  if(s.lbcPending){
+    colB += '<tr><td class="l" data-l="" style="color:var(--warn);font-size:11px">⚡ 最新交易日龙虎榜尚未公布（约 18:00 出），本表<b>暂未剔除机构席位票</b>；18:40 定稿跑批后自动更新为正式版。明日实际成交以定稿版为准。</td></tr>'
+  }
+  var planAll = s.nextCandidatesAll || null
+  if(!closed){
+    colB += '<tr><td class="l" data-l="" style="color:var(--tx2)">⏳ <b>收盘后判断</b>：计划由 <b>今日收盘</b> 选出、<b>明日 09:30–09:33</b> 开盘价挂单执行。盘中不提前公布，避免误以为已经买了。</td></tr>'
+  } else if(planAll && planAll.length){
+    var budget = planAll[0].budgetC
+    colB += planAll.map(function(x,i){
+      var ok = x.canBuy !== false
+      var px = x.refC ? price(x.refC) : '—'
+      var buyTxt = ok
+        ? '可买 <b>'+x.shares+'</b> 股 ≈ <b>'+fmtYuan(x.estC)+'</b> 元'
+        : '<span style="color:var(--warn)">'+esc(x.block||'不可买')+'</span>'
+      return '<tr><td class="l" data-l="">第'+(x.rank||i+1)+'顺位　<b>'+x.code+' '+esc(x.name)+'</b>　'+x.lbc+' 板　成交额 '+((x.amount||0)/1e8).toFixed(2)+' 亿'
+        + '<br><span style="font-size:11px;color:var(--tx2)">参考价 '+px+'（今收）　'+buyTxt+'</span></td></tr>'
+    }).join('')
+    colB += '<tr><td class="l" data-l="" style="color:var(--tx2);font-size:11px">明日开盘挂单，一字涨停开盘则弃买'
+      + (budget ? '　·　每份可用约 ' + fmtYuan(budget) + ' 元（总资产 ÷ ' + ((s.risk&&s.risk.slots)||1) + ' 份）' : '')
+      + (planAll[0].freeSlots != null ? '　·　本次空位 ' + planAll[0].freeSlots + ' 个（只有前 ' + planAll[0].freeSlots + ' 顺位真的会买）' : '')
+      + '<br>参考价 = 今日收盘价；实际按明日开盘价成交，股数与金额会有差异。买不起也照实显示，不隐藏。</td></tr>'
+  } else if(s.nextCandidates && s.nextCandidates.length){
+    colB += s.nextCandidates.map(function(x,i){
+      return '<tr><td class="l" data-l="">第'+(i+1)+'顺位　'+x.code+' '+x.name+'　'+x.lbc+' 板　成交额 '+((x.amount||0)/1e8).toFixed(2)+' 亿</td></tr>'
+    }).join('')
+  } else {
+    colB += '<tr><td class="l" data-l="" style="color:var(--tx2)">'+(s.m2&&s.m2.pickToday.pause?'今日判定空仓，明日不开新仓':'无候选（今日没有同时满足量能比 / 成交额 / 连板档位 / 闸门的票）')+'</td></tr>'
+  }
+  colB += '</table>'
+
+  h += '<div>'+colA+'</div><div>'+colB+'</div></div>'
+
+  /* 集合竞价对照（09:20–09:25 竞价 vs 实际成交） */
+  var auch = auctionRowsHTML(s.id)
+  if(auch) h += '<div style="margin:14px 0 4px">'+auch+'</div>'
+
+  /* ★ 今日操作股票 · 当日分时图（用户 2026-10-16 要求）
+     数据源 data/minute-chart.json（每日收盘采集 5 分钟全序列，只留最近 8 个交易日）。
+     要画的票 = 今日买入 ∪ 今日卖出 ∪ 持仓（去重），与本策略有关联的优先。 */
+  var chartCodes = []
+  var seenCode = Object.create(null)
+  ;[buys, sells, (s.positions||[])].forEach(function(arr, ai){
+    ;(arr||[]).forEach(function(x){
+      if(!x || !x.code || seenCode[x.code]) return
+      seenCode[x.code] = 1
+      chartCodes.push({ code:x.code, name:x.name, lbc:x.lbc,
+        tag: ai===0 ? '今日买入' : (ai===1 ? '今日卖出' : '持仓') })
+    })
+  })
+  var chartsHTML = minuteChartsHTML(chartCodes, buys, sells)
+  if(chartsHTML){
+    h += '<div class="stitle" style="border-color:'+c+';font-size:13px">今日操作股票 · 分时</div>'
+    h += chartsHTML
+  }
+
+  /* 成交明细（标题在下方按有无卡片二选一输出） */
+  var evs = []
+  ;(s.trades||[]).forEach(function(t){
+    /* ★ 同一笔交易的两条腿共享 pair 信息：点开任一腿都能看到「买入日 + 卖出日」两张分时 */
+    var pair = { bd:t.buyDate, bp:t.buyC, sd:t.sellDate, sp:t.sellC }
+    evs.push({d:t.buyDate, ty:'买入', code:t.code, name:t.name, lbc:t.lbc, sh:t.shares, p:t.buyC, tag:'b', tm:'09:30', bd:pair.bd, bp:pair.bp, sd:pair.sd, sp:pair.sp})
+    evs.push({d:t.sellDate, ty:'卖出', code:t.code, name:t.name, lbc:t.lbc, sh:t.shares, p:t.sellC,
+      pnl:t.pnlC, pp:t.pnlPct, reason:t.reason, tag:'s', tm:sellTimeOf(t), bd:pair.bd, bp:pair.bp, sd:pair.sd, sp:pair.sp})
+  })
+  ;(s.positions||[]).forEach(function(p){ evs.push({d:p.buyDate, ty:'买入', code:p.code, name:p.name, lbc:p.lbc, sh:p.shares, p:p.buyC, tag:'b', tm:'09:30', open:'持仓中', bd:p.buyDate, bp:p.buyC}) })
+  evs.sort(function(a,b){ return a.d===b.d ? (a.ty<b.ty?-1:1) : (a.d<b.d?1:-1) })
+
+  /* ★ 2026-10-17 晚：按用户要求，成交明细的表格版整体移除，只保留分时卡片形态——
+       每笔成交一张卡：卡头 = 买入/卖出/当日买卖 + 名称代码日期；
+       卡身 = 真实分时，B/S 点旁直接标成交价；
+       卡底小字 = 股数、盈亏。
+     分时库只滚动保留近 20 个交易日，更早的成交降级为文字卡（价格/股数/盈亏照常展示），历史不丢。 */
+  var tch = tradeChartsHTML(evs)
+  var tTotal = s.tradesTotal != null ? s.tradesTotal : (s.trades||[]).length
+  if(tch){
+    h += '<div class="stitle" style="border-color:'+c+';font-size:13px">成交明细'+(s.live?'（⚡实时）':'')+' · 最近 10 个交易日（累计 '+tTotal+' 笔）</div>'
+    h += tch
+    h += '<div style="color:var(--tx2);font-size:11px;margin:8px 2px 10px">B = 次日开盘买入 · S = 断板 14:57 / 到期 15:00 卖出；图上 B/S 点旁标注成交价，卡底小字为股数与盈亏。'
+      + '<b>完整成交台账永久保存</b>（data/trades-ledger.json，累计 '+tTotal+' 笔，只增不删，改参数也不会覆盖真实成交），本页展示最近 10 个交易日；分时图保留最近 20 个交易日，更早的成交以文字卡展示。</div>'
+  } else {
+    h += '<div class="stitle" style="border-color:'+c+';font-size:13px">成交明细'+(s.live?'（⚡实时）':'')+'</div>'
+    h += '<div class="empty">暂无成交 —— 模拟盘 '+DATA.startDate+' 启动，首笔买入在下一交易日开盘执行</div>'
+  }
+
+  document.getElementById('detail').innerHTML = h
+}
+
+/* ================= 今日分时图（SVG） =================
+ * 数据：MCHART = { rows:[{date,code,name,lbc,prevC,bars:[{t,o,h,l,c,v}]}] }
+ * 规则：
+ *   · 只画「该票最新一天」的序列（最近一个交易日有数据就用它）；
+ *   · y 轴以「昨收」为基准对称，涨红跌绿（A 股口径）；
+ *   · 叠一条均价线（累计成交额/累计成交量）与一条昨收虚线；
+ *   · 09:35 起画（5 分钟粒度），横轴标 09:35 / 11:30 / 14:00 / 15:00 附近刻度；
+ *   · ★ 叠「买卖点」标记：B（买，红实心）/ S（卖，绿实心），价按实际成交价贴到对应 bar 上。
+ */
+/* ================= 成交明细 · B/S 时点条 =================
+ * 为什么（2026-10-17 用户要求）：
+ *   成交明细只有「价格/股数/盈亏」，看不出这笔单子落在当日分时的什么位置。
+ *   策略是固定规则：买入 = T+1 开盘 09:30；卖出 = 断板 14:57 尾盘集合竞价 / 到期 15:00 收盘。
+ *   ⇒ 不需要分钟数据也能画出「时点位置」（全历史可用）。
+ *   ⇒ 该票该日若在 minute-chart.json 里（最近 8 个交易日），整行可点开看真分时并标 B/S。
+ */
+function sellTimeOf(t){
+  var r = String(t && t.reason || '')
+  if(/退市|数据终止/.test(r)) return null          /* 强平价不可定时刻 */
+  if(/最大持有|到期/.test(r)) return '15:00'        /* 收盘价到期 */
+  return '14:57'                                   /* 断板 → 尾盘集合竞价 */
+}
+/* 09:30→0，11:30/13:00→120（午休折叠），15:00→240（单位：交易分钟） */
+function tMin(hhmm){
+  var m = String(hhmm||'').match(/(\d{1,2}):(\d{2})/)
+  if(!m) return null
+  var v = +m[1]*60 + +m[2]
+  if(v <= 9*60+30) return 0
+  if(v <= 11*60+30) return v - (9*60+30)
+  if(v < 13*60) return 120
+  if(v >= 15*60) return 240
+  return 120 + (v - 13*60)
+}
+
+function seriesOf(code, date){
+  var pools = []
+  if(MCHART && MCHART.rows) pools.push(MCHART)
+  if(MTRADE && MTRADE.rows) pools.push(MTRADE)
+  var best = null
+  pools.forEach(function(src){
+    src.rows.forEach(function(r){
+      if(r.code!==code) return
+      if(date && String(r.date)!==String(date)) return
+      if(!r.bars || r.bars.length<2) return
+      if(!best || String(r.date) > String(best.date)) best = r
+    })
+  })
+  return best
+}
+/* 把「成交时间(09:35 形式的 bar 键)」落到 bars 的下标上。
+ * 规则：取第一个 t >= 成交时间的 bar；成交时间早于首根则归到第 0 根（开盘买）。
+ * 无成交时间（老交易记录）⇒ 用 fallbackIdx（买=0 开盘；卖=末根 收盘）。 */
+function barIdxByTime(bars, hhmm, fallbackIdx){
+  if(hhmm && /^\d{2}:\d{2}$/.test(hhmm)){
+    for(var i=0;i<bars.length;i++){ if(bars[i].t >= hhmm) return i }
+    return bars.length-1
+  }
+  return fallbackIdx
+}
+/* 归一化成交时间到「5 分钟 bar 键」（新浪 scale=5 的 bar 结束时刻）：
+ *   <09:35 → 09:35（开盘段，首根）
+ *   09:35–11:30 → 向上取整到 5 分（如 09:33→09:35、09:36→09:40）
+ *   11:31–13:04 → 13:05（午休，午后首根）
+ *   13:05–15:00 → 向上取整到 5 分
+ *   ≥15:00 → 15:00（收盘）
+ * 说明：bar 键 = 该 5 分钟区间的「结束时刻」（新浪约定）。 */
+function toBarKey(t){
+  if(!t) return null
+  var m = String(t).match(/(\d{1,2}):(\d{2})/)
+  if(!m) return null
+  var hh = +m[1], mi = +m[2]
+  var mins = hh*60 + mi
+  if(mins < 9*60+35) return '09:35'
+  if(mins > 11*60+30 && mins < 13*60+5) return '13:05'
+  if(mins >= 15*60) return '15:00'
+  var up = Math.ceil(mins/5)*5                       /* 向上取整到 5 分 */
+  var uh = Math.floor(up/60), um = up % 60
+  return (uh<10?'0':'')+uh+':'+(um<10?'0':'')+um
+}
+function minuteChartSVG(rec, tag, name, lbc, marks, opts){
+  var o = opts || {}
+  var big = !!o.big
+  var W = big ? 760 : 360
+  var H = big ? 312 : 172
+  var padL = 6, padR = big ? 62 : 46, padT = big ? 16 : 10, padB = big ? 40 : 28
+  var volH = big ? 46 : 24, gap = big ? 8 : 6
+  var priceH = H - padT - padB - volH - gap
+  var bars = rec.bars || []
+  var n = bars.length
+  if(n < 2) return ''
+  var base = rec.prevC != null ? rec.prevC : bars[0].o
+  /* 对称区间：取相对昨收的最大绝对偏离 */
+  var dev = 0
+  bars.forEach(function(b){
+    dev = Math.max(dev, Math.abs(b.h-base), Math.abs(b.l-base), Math.abs(b.c-base), Math.abs(b.o-base))
+  })
+  ;(marks||[]).forEach(function(mk){ if(mk.p!=null) dev = Math.max(dev, Math.abs(mk.p-base)) })
+  if(dev < base*0.001) dev = base*0.005
+  var hi = base + dev*1.10, lo = base - dev*1.10
+  /* x 轴按「交易分钟」定位：09:30→0，11:30/13:00→120（午休折叠），15:00→240。
+     与真实分时图一致；B/S 点因此落在准确的时间位置上。 */
+  var xOf = function(t){
+    var m = tMin(t)
+    if(m == null) m = 0
+    return padL + (W-padL-padR) * Math.max(0, Math.min(240, m)) / 240
+  }
+  var Y = function(p){ return padT + priceH*(hi-p)/(hi-lo) }
+  var colOf = function(p){ return p>base ? '#f04a4a' : (p<base ? '#2fbf71' : '#8fa0bf') }
+  var last = bars[n-1]
+  var chg = (last.c-base)/base
+  var fs = big ? 9.5 : 8
+  var fs2 = big ? 10.5 : 9
+
+  var g = ''
+  g += '<rect x="0" y="0" width="'+W+'" height="'+H+'" fill="#1b2438" rx="8"/>'
+
+  /* 时间网格 + 刻度（09:30 / 10:30 / 11:30|13:00 / 14:00 / 15:00） */
+  ;[[0,'09:30'],[60,'10:30'],[120,'11:30 / 13:00'],[180,'14:00'],[240,'15:00']].forEach(function(tk){
+    var xx = padL + (W-padL-padR)*tk[0]/240
+    if(tk[0] > 0 && tk[0] < 240) g += '<line x1="'+xx.toFixed(1)+'" y1="'+padT+'" x2="'+xx.toFixed(1)+'" y2="'+(padT+priceH).toFixed(1)+'" stroke="#243149" stroke-width="1"/>'
+    var anc = tk[0]===0 ? 'start' : (tk[0]===240 ? 'end' : 'middle')
+    g += '<text x="'+xx.toFixed(1)+'" y="'+(H-8)+'" fill="#8fa0bf" font-size="'+fs+'" text-anchor="'+anc+'">'+tk[1]+'</text>'
+  })
+
+  /* 昨收基准线 */
+  var yBase = Y(base)
+  g += '<line x1="'+padL+'" y1="'+yBase.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+yBase.toFixed(1)+'" stroke="#8fa0bf" stroke-width="1" stroke-dasharray="4 3" opacity=".6"/>'
+  g += '<text x="'+(W-padR+4)+'" y="'+(yBase+3.5).toFixed(1)+'" fill="#8fa0bf" font-size="'+(fs-0.5)+'">昨收 '+base.toFixed(2)+'</text>'
+  /* 涨/跌停参考线（若在区间内） */
+  ;[[base*1.1,'涨停'],[base*0.9,'跌停']].forEach(function(pair){
+    if(pair[0] <= hi && pair[0] >= lo){
+      var yy = Y(pair[0])
+      g += '<line x1="'+padL+'" y1="'+yy.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+yy.toFixed(1)+'" stroke="#2a3550" stroke-width="1" stroke-dasharray="2 4"/>'
+    }
+  })
+
+  /* 成交量柱（价格区下方），红涨绿跌 */
+  var vmax = 0
+  bars.forEach(function(b){ if(b.v > vmax) vmax = b.v })
+  var volY0 = padT + priceH + gap + volH
+  var bw = Math.max(1.2, (W-padL-padR)/n*0.62)
+  if(vmax > 0){
+    bars.forEach(function(b){
+      var h = Math.max(0.6, volH * (b.v||0) / vmax)
+      var col = b.c >= (b.o==null?b.c:b.o) ? '#8f2c2c' : '#1d6b45'
+      g += '<rect x="'+(xOf(b.t)-bw/2).toFixed(1)+'" y="'+(volY0-h).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+h.toFixed(1)+'" fill="'+col+'" opacity=".75"/>'
+    })
+  }
+  g += '<line x1="'+padL+'" y1="'+volY0.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+volY0.toFixed(1)+'" stroke="#2a3550" stroke-width="1"/>'
+  g += '<text x="'+(W-padR+4)+'" y="'+(volY0-volH/2+3).toFixed(1)+'" fill="#6b7c9b" font-size="'+(fs-0.5)+'">量</text>'
+
+  /* 均价线（累计额/累计量，mid 近似额） */
+  var cumV = 0, cumA = 0, avgPts = []
+  bars.forEach(function(b){
+    var v = b.v||0, mid = (b.h+b.l+b.c)/3
+    cumV += v; cumA += mid*v
+    avgPts.push({ t:b.t, p: cumV>0 ? cumA/cumV : b.c })
+  })
+  var apath = avgPts.map(function(q,i){ return (i?'L':'M')+xOf(q.t).toFixed(1)+' '+Y(q.p).toFixed(1) }).join(' ')
+  g += '<path d="'+apath+'" fill="none" stroke="#f0a04a" stroke-width="'+(big?1.2:1)+'" opacity=".8"/>'
+
+  /* 分时价格线（从 09:30 开盘价起画） */
+  var linePts = [{ t:'09:30', c: bars[0].o }].concat(bars)
+  var ppath = linePts.map(function(b,i){ return (i?'L':'M')+xOf(b.t).toFixed(1)+' '+Y(b.c).toFixed(1) }).join(' ')
+  g += '<path d="'+ppath+'" fill="none" stroke="'+colOf(last.c)+'" stroke-width="'+(big?1.8:1.6)+'" stroke-linejoin="round"/>'
+  g += '<circle cx="'+xOf(last.t).toFixed(1)+'" cy="'+Y(last.c).toFixed(1)+'" r="'+(big?3:2.6)+'" fill="'+colOf(last.c)+'"/>'
+
+  /* ★ B/S 标记：实心点 + 竖虚线对齐时间轴 + 字母 + 成交价小字（mk.pr 传入才画）。
+     时间看点的水平位置即可，价格直接写在图上；「今日操作股票」不传 pr，维持原样。 */
+  ;(marks||[]).forEach(function(mk){
+    if(mk.p == null) return
+    var tm = mk.t || (mk.k==='B' ? '09:30' : '14:57')
+    var mx = xOf(tm), my = Y(mk.p)
+    var isBuy = mk.k === 'B'
+    var mc = isBuy ? '#4aa3f0' : '#f0a04a'
+    /* 竖虚线：从成交点落到时间轴，直观看出「几点成交」 */
+    g += '<line x1="'+mx.toFixed(1)+'" y1="'+my.toFixed(1)+'" x2="'+mx.toFixed(1)+'" y2="'+(H-padB+2).toFixed(1)+'" stroke="'+mc+'" stroke-width="1" stroke-dasharray="2 3" opacity=".45"/>'
+    g += '<circle cx="'+mx.toFixed(1)+'" cy="'+my.toFixed(1)+'" r="'+(big?4.6:3.8)+'" fill="'+mc+'" stroke="#0e1420" stroke-width="1.4"/>'
+    /* 字母（B/S）标在点上方；★ 2026-10-17 用户要求把成交价也显示在图上——
+       价格竖排贴在字母上方，靠近图顶时整体翻到点下方，避免出界。 */
+    var ly = my - (big?9:7.5)
+    var flip = my < padT + (big?22:19)
+    if(flip) ly = my + (big?15:12)
+    g += '<text x="'+mx.toFixed(1)+'" y="'+ly.toFixed(1)+'" fill="'+mc+'" font-size="'+(big?11:9.5)+'" font-weight="700" text-anchor="middle">'+mk.k+'</text>'
+    if(mk.pr != null){
+      var py = flip ? ly + (big?12:10) : ly - (big?12:10.5)
+      g += '<text x="'+mx.toFixed(1)+'" y="'+py.toFixed(1)+'" fill="'+mc+'" font-size="'+(big?10:8.5)+'" font-weight="700" text-anchor="middle">'+mk.pr.toFixed(2)+'</text>'
+    }
+  })
+
+  /* 右上角：当前价 + 涨跌幅 */
+  var cc = colOf(last.c)
+  g += '<text x="'+(W-padR+4)+'" y="'+(padT+9)+'" fill="'+cc+'" font-size="'+fs2+'" font-weight="700">'+last.c.toFixed(2)+'</text>'
+  g += '<text x="'+(W-padR+4)+'" y="'+(padT+21)+'" fill="'+cc+'" font-size="'+(fs-0.5)+'">'+(chg>0?'+':'')+(chg*100).toFixed(2)+'%</text>'
+
+  /* 图例 */
+  var lg = ''
+  if((marks||[]).length){
+    lg = '<div class="mclg">'
+      + (marks.some(function(m){return m.k==='B'}) ? '<span><i style="background:#4aa3f0"></i>B 买入</span>' : '')
+      + (marks.some(function(m){return m.k==='S'}) ? '<span><i style="background:#f0a04a"></i>S 卖出</span>' : '')
+      + '<span><i style="background:#f0a04a;height:2px;border-radius:0"></i>均价</span>'
+      + '</div>'
+  }
+  return '<div class="mchart'+(big?' big':'')+'">'
+    + '<div class="mch">'
+    +   '<span class="tag '+((tag==='今日买入'||tag==='买入')?'b':((tag==='今日卖出'||tag==='卖出')?'s':'sk'))+'">'+tag+'</span>'
+    +   '<span class="mcn">'+esc(name||rec.name||'')+'</span>'
+    +   '<span class="mcc">'+esc(rec.code)+'</span>'
+    +   (lbc!=null?'<span class="mcl">'+lbc+' 板</span>':'')
+    +   '<span class="mcd">'+cnDate(rec.date)+' 分时</span>'
+    + '</div>'
+    + '<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="auto" preserveAspectRatio="xMidYMid meet">'+g+'</svg>'
+    + lg
+    + (o.foot ? '<div class="mcfoot">'+o.foot+'</div>' : '')
+    + '</div>'
+}
+/* 从买卖记录构造该票的标记点：[{k:'B'|'S', p:成交价(元), t:'09:35'}]
+ * ★ 时间来源优先级：显式 time 字段 > 约定（买入=开盘、卖出=14:57 收盘）。
+ *   成交价是「分」，图上是「元」⇒ /100。 */
+function marksOf(code, buys, sells){
+  var out = []
+  ;(buys||[]).forEach(function(b){
+    if(b.code!==code) return
+    out.push({ k:'B', p: b.buyC!=null ? b.buyC/100 : null, t: b.time || b.buyTime || '09:30' })
+  })
+  ;(sells||[]).forEach(function(t){
+    if(t.code!==code) return
+    out.push({ k:'S', p: t.sellC!=null ? t.sellC/100 : null, t: t.time || t.sellTime || sellTimeOf(t) || '14:57' })
+  })
+  return out
+}
+function minuteChartsHTML(codes, buys, sells){
+  if(!MCHART && !MTRADE) return ''
+  if(!codes || !codes.length) return ''
+  var out = []
+  codes.forEach(function(cc){
+    var rec = seriesOf(cc.code)
+    if(!rec) return
+    var marks = marksOf(cc.code, buys, sells).filter(function(mk){ return mk.p!=null })
+    out.push(minuteChartSVG(rec, cc.tag, cc.name, cc.lbc, marks))
+  })
+  if(!out.length) return ''
+  return '<div class="mcharts">'+out.join('')+'</div>'
+}
+
+/* ★ 成交明细 · 分时卡片（2026-10-17 晚：表格移除后，这里是成交明细的唯一载体）：
+ *   每笔成交（买入腿/卖出腿）一张卡：
+ *     · 跨日交易 ⇒ 买入日一张（B 点 + 买价 + 股数）+ 卖出日一张（S 点 + 卖价 + 股数 + 盈亏）；
+ *     · 同日买卖 ⇒ 合并一张图标 B/S 双点，卡底同时给买价、卖价、盈亏；
+ *     · 持仓中 ⇒ 只画买入日。
+ *   该 (code,date) 没有分钟数据（超 20 个交易日保留期）⇒ 降级为文字卡，价格/股数/盈亏照常展示。
+ *   卡底小字（.mcfoot）= 股数、盈亏；成交价直接标在分时图 B/S 点旁（mk.pr）。 */
+function tradeChartsHTML(evs){
+  if((!MCHART || !MCHART.rows) && (!MTRADE || !MTRADE.rows)) return ''
+  var out = []
+  ;(evs||[]).forEach(function(e){
+    if(!e || !e.code) return
+    /* 同日买卖：两腿合并成一张卡，在卖出腿处画，买入腿跳过 */
+    if(e.tag === 'b' && e.sd === e.d) return
+    var isBuy = e.tag === 'b'
+    var sameDay = !isBuy && e.sd === e.bd && isFinite(e.bp)
+
+    /* B/S 标记（p 纵轴定位 / pr 是要写在图上的成交价，单位元） */
+    var marks = []
+    if(sameDay){
+      marks.push({ k:'B', p:e.bp/100, t:'09:30', pr:e.bp/100 })
+      if(isFinite(e.sp)) marks.push({ k:'S', p:e.sp/100, t:e.tm || '14:57', pr:e.sp/100 })
+    } else if(isBuy){
+      if(isFinite(e.bp)) marks.push({ k:'B', p:e.bp/100, t:'09:30', pr:e.bp/100 })
+    } else if(isFinite(e.sp)){
+      marks.push({ k:'S', p:e.sp/100, t:e.tm || '15:00', pr:e.sp/100 })
+    }
+
+    /* 卡底小字：股数 / 盈亏 */
+    var foot = []
+    if(sameDay){
+      foot.push('<span>买 <b>'+price(e.bp)+'</b> × '+e.sh+' 股</span>')
+      foot.push('<span>卖 <b>'+price(e.sp)+'</b></span>')
+      foot.push('<span>盈亏 <b class="'+cls(e.pnl)+'">'+signYuan(e.pnl)+'（'+pct(e.pp)+'）</b></span>')
+    } else if(isBuy){
+      foot.push('<span>买入 <b>'+price(e.bp)+'</b> × '+e.sh+' 股</span>')
+      if(e.open) foot.push('<span>'+esc(e.open)+'</span>')
+    } else {
+      foot.push('<span>卖出 <b>'+price(e.sp)+'</b> × '+e.sh+' 股</span>')
+      foot.push('<span>盈亏 <b class="'+cls(e.pnl)+'">'+signYuan(e.pnl)+'（'+pct(e.pp)+'）</b></span>')
+    }
+    var footHTML = foot.join('')
+    var tagTxt = sameDay ? '当日买卖' : (isBuy ? '买入' : '卖出')
+
+    var rec = seriesOf(e.code, e.d)
+    if(rec && marks.length){
+      out.push(minuteChartSVG(rec, tagTxt, e.name, e.lbc, marks, { foot:footHTML }))
+    } else {
+      /* 无分时数据：文字卡降级，信息不丢 */
+      var px = marks.map(function(m){ return m.k+' '+m.pr.toFixed(2) }).join(' · ')
+      out.push('<div class="mchart"><div class="mch">'
+        + '<span class="tag '+(isBuy?'b':'s')+'">'+tagTxt+'</span>'
+        + '<span class="mcn">'+esc(e.name)+'</span>'
+        + '<span class="mcc">'+esc(e.code)+'</span>'
+        + (e.lbc!=null?'<span class="mcl">'+e.lbc+' 板</span>':'')
+        + '<span class="mcd">'+cnDate(e.d)+'</span></div>'
+        + '<div class="mnochart">分时数据已过保留期（近 20 个交易日）'
+        + (px ? '<br>成交价：'+px : '') + '</div>'
+        + '<div class="mcfoot">'+footHTML+'</div></div>')
+    }
+  })
+  if(!out.length) return ''
+  return '<div class="mcharts wide">'+out.join('')+'</div>'
+}
+
+/* ---------- 盘中实时面板（顶部，只显当前选中策略） ---------- */
+function renderLive(){
+  var box = document.getElementById('live')
+  if(!LIVE || LIVE.phase==='holiday'){ box.style.display='none'; return }
+  var lv = null
+  ;(LIVE.strategies||[]).forEach(function(x){ if(x.id===CUR) lv = x })
+  if(!lv){ box.style.display='none'; return }
+  var ph = { 'trading':['盘中实时','trading'], 'closed':['已收盘 · 以收盘跑为准','closed'], 'pre-open':['开盘前','pre-open'], 'auction':['集合竞价（09:15–09:25）','pre-open'] }[LIVE.phase] || ['盘中','closed']
+  var h = '<div class="hd"><b>'+CUR+' 盘中实时</b><span class="badge '+ph[1]+'">'+ph[0]+'</span>'
+    + '<span style="color:var(--tx2);font-size:12px">'+cnDate(LIVE.bjDate)+' '+LIVE.bjTime+'</span>'
+    + (lv.pickToday ? '　<span class="pick">今日跟随：'+lv.pickToday+'</span>' : '')
+    + '<span style="color:var(--tx2);font-size:10.5px;margin-left:auto">'
+    + (QUOTE.at ? ('行情 '+String(QUOTE.at.getHours()).padStart(2,'0')+':'+String(QUOTE.at.getMinutes()).padStart(2,'0')+':'+String(QUOTE.at.getSeconds()).padStart(2,'0')+' 直连刷新') : '行情加载中…')
+    + ' · 数据帧 '+(LIVE.bjTime||'—')+'</span></div>'
+  if(LIVE.note) h += '<div class="note">'+LIVE.note+'</div>'
+  /* ★ 2026-10-21：数据帧不是今天的就必须当场说出来。
+     以前只是安静地显示旧数据，用户看到的是「停在 20 号」却不明白为什么。 */
+  if(LIVE.bjDate && String(LIVE.bjDate) !== bjToday()){
+    h += '<div class="note" style="color:#e0703a;font-weight:600">⚠ 数据帧停在 '+cnDate(LIVE.bjDate)+' '+esc(LIVE.bjTime||'')+
+         '，不是今天。持仓/买卖事件以该帧为准；页面右侧「行情」时间是浏览器直连的实时价，只代表这些持仓现在的价格。'
+         + '下方每日跑批未运行的原因见提交记录。</div>'
+  }
+  h += '<div class="lv-grid"><div class="lv">'
+  h += '<div class="nm">当日 <span class="'+cls(lv.dayRet)+'">'+pct(lv.dayRet)+'</span>　累计 <span class="'+cls(lv.cumRet)+'">'+pct(lv.cumRet)+'</span></div>'
+  if(lv.todayBuys && lv.todayBuys.length){
+    h += lv.todayBuys.map(function(b){ return '<div class="row">🔴 买入 <b>'+b.name+'</b> '+b.lbc+'板 '+b.shares+'股 @ <b>'+price(b.buyC)+'</b>（开盘成交）</div>' }).join('')
+  }
+  if(lv.todaySells && lv.todaySells.length){
+    h += lv.todaySells.map(function(t){
+      var isPrev = t.preview === true || /^【预演/.test(t.reason || '')
+      var head = isPrev ? '⏳ <b>预演卖出</b>（未成交）' : '🔵 卖出'
+      var nameTxt = isPrev ? ' <b>'+t.name+'</b> @ 现价 ' : ' <b>'+t.name+'</b> @ '
+      return '<div class="row'+(isPrev?' prev':'')+'">'+head+nameTxt+price(t.sellC)
+        +'　<span class="'+cls(t.pnlC)+'">'+signYuan(t.pnlC)+'（'+pct(t.pnlPct)+'）</span> '+t.reason+'</div>'
+    }).join('')
+  }
+  if(lv.skippedToday && lv.skippedToday.length){
+    h += lv.skippedToday.map(function(x){ return '<div class="row">⊘ 弃买 '+x.name+'（'+x.reason+'）</div>' }).join('')
+  }
+  ;(lv.positions||[]).forEach(function(p){
+    h += '<div class="row">持仓 <b>'+p.name+'</b> 现价 <b>'+(p.curC!=null?price(p.curC):'—')+'</b>　浮盈 <span class="'+cls(p.curPnlC)+'">'+(p.curPnlC!=null?signYuan(p.curPnlC)+' 元':'—')+'</span>'+(p.ztNow?' 🔒涨停中':'')+'</div>'
+  })
+  if(!(lv.todayBuys||[]).length && !(lv.todaySells||[]).length && !(lv.positions||[]).length){
+    h += '<div class="row">今日暂无操作（候选 '+(lv.nextCandidates?lv.nextCandidates.length:0)+' 只待明日开盘）</div>'
+  }
+  h += '</div></div>'
+  box.innerHTML = h
+  box.style.display = 'block'
+}
+
+/* ---------- QMT 实盘区 ----------
+ * 数据来自 data/qmt-live.json：qmt/_snapshot_qmt.py 在 QMT 里用 xtquant 只读采集
+ * （账户/持仓/当日委托/当日成交/策略状态/一致性校验），计划任务每 10 分钟推一次。
+ * ★ 价格不靠它：这里同样用东财 JSONP 直连行情覆盖持仓现价，所以页面上的
+ *   持仓浮盈是实时的，采集帧只负责「有哪些持仓、今天成了哪些单」。
+ * ★ 采集帧过期/离线一律显式标注，不安静显示旧数字。 */
+var QMT = null
+var QMT_QUOTE_AT = null
+
+function loadQmt () {
+  fetch('./data/qmt-live.json?_=' + Date.now(), { cache: 'no-store' })
+    .then(function (r) { return r.ok ? r.json() : null })
+    .then(function (j) { if (j) { QMT = j; renderQmt(); applyQmtQuotes() } })
+    .catch(function () { /* 保留上一次 */ })
+}
+
+function qmtMoney (c) {
+  if (c == null || !isFinite(c)) return '—'
+  return (c / 100).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+function qmtAgeMin () {
+  if (!QMT || !QMT.updated) return null
+  var t = new Date(QMT.updated).getTime()
+  return isFinite(t) ? (Date.now() - t) / 60000 : null
+}
+
+/* 用直连行情覆盖 QMT 持仓现价，重算市值/当日盈亏（昨收净值来自采集帧的 prevTotalC） */
+function applyQmtQuotes () {
+  if (!QMT || !QMT.ok || QMT.stale || QMT.phase !== 'trading') return
+  if (qmtDate8() !== bjToday().replace(/-/g, '')) return
+  var ps = QMT.positions || []
+  if (!ps.length) return
+  var codes = []
+  ps.forEach(function (p) { if (codes.indexOf(p.code6) < 0) codes.push(p.code6) })
+  jsonpQuotes(codes, function (m) {
+    if (!m) return
+    var mv = 0, touched = false
+    ps.forEach(function (p) {
+      var q = m[p.code6]
+      if (q && Number(q.f2) > 0) { p.curC = Math.round(Number(q.f2) * 100); touched = true }
+      p.pnlC = (p.curC - p.openC) * p.shares
+      p.pnlPct = p.openC ? (p.curC / p.openC - 1) : null
+      mv += p.curC * p.shares
+    })
+    if (!touched) return
+    QMT_QUOTE_AT = new Date()
+    var a = QMT.account || {}
+    a.mvC = mv
+    a.totalC = (a.cashC || 0) + mv
+    if (a.prevTotalC > 0) {
+      a.dayPnlC = a.totalC - a.prevTotalC
+      a.dayRet = a.dayPnlC / a.prevTotalC
+    }
+    renderQmt()
+  })
+}
+
+function qmtDate8 () {
+  return QMT ? String(QMT.bjDate8 || String(QMT.bjDate || '').replace(/-/g, '')) : ''
+}
+
+function renderQmt () {
+  var box = document.getElementById('qmt')
+  if (!QMT) { box.style.display = 'none'; return }
+  var a = QMT.account || {}
+  var age = qmtAgeMin()
+  var staleDay = qmtDate8() !== bjToday().replace(/-/g, '')
+  var bad = QMT.stale || !QMT.ok
+  var grade = bad ? ['离线', 'closed'] : (staleDay ? ['非今日帧', 'closed'] : (age != null && age > 25 ? ['采集滞后', 'pre-open'] : ['在线', 'trading']))
+  var h = '<div class="hd"><b>QMT 实盘</b>'
+    + '<span class="badge ' + grade[1] + '">' + grade[0] + '</span>'
+    + '<span style="color:var(--tx2);font-size:12px">' + esc(a.id || '') + ' · 华鑫模拟 · 只读采集</span>'
+    + '<span style="color:var(--tx2);font-size:10.5px;margin-left:auto">'
+    + '采集 ' + esc(String(QMT.updated || '').slice(11, 19)) + (age != null ? '（' + Math.round(age) + ' 分钟前）' : '')
+    + (QMT_QUOTE_AT ? ' · 行情 ' + QMT_QUOTE_AT.toTimeString().slice(0, 8) + ' 直连' : '')
+    + '</span></div>'
+
+  if (bad) {
+    h += '<div class="note" style="color:#e0703a;font-weight:600">⚠ ' + esc(QMT.note || 'QMT 未连接（客户端没开或未登录）')
+      + '　下面是最后一次成功的快照' + (QMT.staleSince ? '（' + esc(String(QMT.staleSince).slice(0, 16).replace('T', ' ')) + '）' : '') + '，不是实时状态。</div>'
+  } else if (staleDay) {
+    h += '<div class="note" style="color:#e0703a">⚠ 采集帧日期是 ' + esc(QMT.bjDate) + '，不是今天。持仓与成交以该日为准。</div>'
+  } else if (age != null && age > 25) {
+    h += '<div class="note">采集已 ' + Math.round(age) + ' 分钟未更新（计划任务应在盘中每 10 分钟跑一次）。持仓价格仍是实时直连的。</div>'
+  }
+
+  h += '<div class="lv-grid"><div class="lv">'
+  h += '<div class="nm">总资产 <b>' + qmtMoney(a.totalC) + '</b>　当日 <span class="' + cls(a.dayRet) + '">'
+    + (a.dayPnlC == null ? '待次日' : signYuan(a.dayPnlC) + ' 元（' + pct(a.dayRet) + '）') + '</span></div>'
+  h += '<div class="row">可用 ' + qmtMoney(a.cashC) + '　持仓市值 ' + qmtMoney(a.mvC)
+    + '　持仓 <b>' + (QMT.positions || []).length + '</b>/2'
+    + (a.dayPnlC == null ? '　<span style="color:var(--tx2)">（当日盈亏需有上一交易日净值记录，今天首次采集）</span>' : '') + '</div>'
+
+  ;(QMT.positions || []).forEach(function (p) {
+    h += '<div class="row">持仓 <b>' + esc(p.name || p.code6) + '</b> <span style="color:var(--tx2)">' + esc(p.code6) + '</span> '
+      + p.shares.toLocaleString('zh-CN') + '股　成本 <b>' + price(p.openC) + '</b>　现价 <b>' + price(p.curC) + '</b>'
+      + '　浮盈 <span class="' + cls(p.pnlC) + '">' + signYuan(p.pnlC) + ' 元（' + pct(p.pnlPct) + '）</span>'
+      + (p.canUse === 0 ? ' <span style="color:var(--tx2);font-size:11px">T+1 今日不可卖</span>' : '')
+      + (p.buyDate ? ' <span style="color:var(--tx2);font-size:11px">持仓自 ' + esc(p.buyDateApprox ? '≈' : '') + esc(p.buyDate) + '</span>' : '')
+      + '</div>'
+  })
+  if (!(QMT.positions || []).length) h += '<div class="row">空仓</div>'
+
+  var tr = QMT.trades || []
+  if (tr.length) {
+    tr.forEach(function (t) {
+      var buy = t.side === 'buy'
+      h += '<div class="row">' + (buy ? '🔴 买入' : '🔵 卖出') + ' <b>' + esc(t.name || t.code6) + '</b> '
+        + t.shares.toLocaleString('zh-CN') + '股 @ <b>' + price(t.avgC) + '</b>'
+        + '　<span style="color:var(--tx2);font-size:11px">' + esc(t.at) + ' · ' + esc(t.remark || '') + '</span>'
+        + (t.isStrategy ? ' <span style="color:var(--good);font-size:11px">策略单</span>' : ' <span style="color:#e0703a;font-size:11px">人工单</span>')
+        + '</div>'
+    })
+  } else {
+    h += '<div class="row">今日无成交</div>'
+  }
+  var badOrders = (QMT.orders || []).filter(function (o) { return o.status === 57 || o.filled === 0 })
+  if (badOrders.length) {
+    h += '<div class="row" style="color:#e0703a">废单 ' + badOrders.length + ' 笔：'
+      + badOrders.map(function (o) { return esc(o.code6) + ' ' + o.shares + '股@' + price(o.priceC) + '（' + esc(o.at) + '）' }).join('、') + '</div>'
+  }
+  h += '</div></div>'
+
+  /* ---- 与云端模拟账对比 + 策略一致性 ---- */
+  h += '<div class="qmt-cmp"><div class="qchd">与云端模拟账（E1）对比</div>'
+  h += compareRows()
+  h += consistencyBlock()
+  h += '</div>'
+  box.innerHTML = h
+  box.style.display = 'block'
+}
+
+/* 对比：持仓 / 今日成交 / 情绪闸门。基准固定为主策略（DATA.mainId，默认 E1）。 */
+function compareRows () {
+  var main = (DATA && DATA.mainId) || 'E1'
+  var sim = null
+  ;((LIVE && LIVE.strategies) || []).forEach(function (x) { if (x.id === main) sim = x })
+  var risk = null
+  ;((DATA && DATA.strategies) || []).forEach(function (x) { if (x.id === main) risk = x.risk })
+  var qp = (QMT.positions || []).map(function (p) { return p.code6 }).sort()
+  var sp = ((sim && sim.positions) || []).map(function (p) { return p.code }).sort()
+  var ok = function (b) { return b ? '<span style="color:var(--good);font-weight:600">✓ 一致</span>' : '<span style="color:#e0703a;font-weight:600">✗ 不同</span>' }
+  var out = ''
+  var liveToday = LIVE && LIVE.bjDate && dnum(LIVE.bjDate) === bjToday().replace(/-/g, '')
+  if (LIVE && !liveToday) {
+    out += '<div class="cnote" style="color:#e0703a;padding-left:0">⚠ 模拟账的盘中帧是 ' + esc(LIVE.bjDate || '—')
+      + ' ' + esc(LIVE.bjTime || '') + '，不是今天 ⇒ 下面的「今日买卖」对比不同步，只作参考。</div>'
+  }
+
+  /* 持仓：★ 只作参考，不判红。
+     QMT 是真实账户（起点 100 万、含人工补单），模拟是独立的 50 万账本，
+     两者初始状态就不同 ⇒ 持仓不同是必然的，不是策略分歧。判断策略是否一致看
+     「今日策略买卖」「闸门」「参数」三项，那才是行为层证据。 */
+  var posSame = qp.join(',') === sp.join(',')
+  out += '<div class="crow"><span class="ck">持仓（参考）</span>'
+    + '<span class="cv">QMT ' + (qp.length ? qp.join('、') : '空仓') + '　｜　模拟 ' + (sp.length ? sp.join('、') : '空仓') + '</span>'
+    + (posSame ? '<span style="color:var(--good)">相同</span>' : '<span style="color:var(--tx2)">两套独立账户，本就可能不同</span>') + '</div>'
+  if (!posSame) {
+    var manual = (QMT.positions || []).filter(function (p) { return p.manual }).map(function (p) { return p.code6 })
+    out += '<div class="cnote">' + (manual.length
+      ? 'QMT 侧 <b>' + manual.join('、') + '</b> 是人工补单（备注 manual），不计入策略业绩。'
+      : 'QMT 侧持仓都来自策略，但两边起点不同（100 万 vs 50 万、不同日期建仓）⇒ 标的可以不同。')
+      + '</div>'
+  }
+
+  var qb = (QMT.trades || []).filter(function (t) { return t.side === 'buy' && t.isStrategy })
+  var qs = (QMT.trades || []).filter(function (t) { return t.side === 'sell' && t.isStrategy })
+  var sb = (sim && sim.todayBuys) || []
+  /* ★ 模拟账盘中帧里的 todaySells 是「预演」（preview=true / 原因带【预演】），
+     到收盘才算真成交。QMT 侧是真实成交 ⇒ 比之前必须剔除预演，否则会把
+     「如果现在收盘会卖」误报成「两边卖出不一致」。 */
+  var ssAll = (sim && sim.todaySells) || []
+  var ss = ssAll.filter(function (x) { return !(x.preview === true || /^【预演/.test(x.reason || '')) })
+  var sPrev = ssAll.length - ss.length
+  var bs = qb.map(function (t) { return t.code6 }).sort().join(',') === sb.map(function (x) { return x.code }).sort().join(',')
+  var sss = qs.map(function (t) { return t.code6 }).sort().join(',') === ss.map(function (x) { return x.code }).sort().join(',')
+  out += '<div class="crow"><span class="ck">今日策略买入</span>'
+    + '<span class="cv">QMT ' + (qb.length ? qb.map(function (t) { return t.code6 + ' ' + t.shares + '股@' + price(t.avgC) }).join('、') : '无')
+    + '　｜　模拟 ' + (sb.length ? sb.map(function (x) { return x.code + ' ' + x.shares + '股@' + price(x.buyC) }).join('、') : '无')
+    + (LIVE && LIVE.bjTime ? '（帧 ' + esc(LIVE.bjTime) + '）' : '') + '</span>'
+    + ok(bs) + '</div>'
+  out += '<div class="crow"><span class="ck">今日策略卖出</span>'
+    + '<span class="cv">QMT ' + (qs.length ? qs.map(function (t) { return t.code6 + ' @' + price(t.avgC) }).join('、') : '无')
+    + '　｜　模拟 ' + (ss.length ? ss.map(function (x) { return x.code + ' @' + price(x.sellC) }).join('、') : '无') + '</span>'
+    + ok(sss) + '</div>'
+  if (sPrev) {
+    out += '<div class="cnote">模拟账另有 ' + sPrev + ' 笔「预演卖出」未计入 —— 那是按当前现价推算的「若 14:57 仍未封板则会卖」，不是已成交。</div>'
+  }
+
+  /* 情绪闸门：QMT 从 yzHist 复算；模拟取 dashboard.json 的 risk.gateToday */
+  var g = QMT.gate
+  var qClose = g ? g.closed : null
+  var sClose = risk ? risk.gateToday : null
+  var qG = g && g.date ? String(g.date) : ''
+  var sG = (DATA && DATA.date) ? dnum(DATA.date) : ''
+  var sameGateDay = qG && sG && qG === sG
+  var gt = (g && g.cur != null && g.thr != null)
+    ? ('再封率 ' + (g.cur * 100).toFixed(2) + '% ' + (qClose ? '>' : '≤') + ' 阈值 ' + (g.thr * 100).toFixed(2) + '%（n=' + g.n + '）⇒ ' + (qClose ? '关闭' : '放行'))
+    : '无数据'
+  out += '<div class="crow"><span class="ck">情绪闸门</span>'
+    + '<span class="cv">QMT ' + gt + '　｜　模拟 ' + (sClose == null ? '无记录' : (sClose ? '关闭' : '放行'))
+    + (sG ? '（' + esc(DATA.date) + ' 的 dashboard）' : '') + '</span>'
+    + (qClose == null || sClose == null ? '<span style="color:var(--tx2)">无法比对</span>'
+      : (sameGateDay ? ok(qClose === sClose) : '<span style="color:var(--tx2)">日期不同，不可直接比</span>')) + '</div>'
+  if (g && g.date) {
+    out += '<div class="cnote">闸门取 ' + esc(g.date.slice(0, 4) + '-' + g.date.slice(4, 6) + '-' + g.date.slice(6, 8))
+      + ' 收盘的再封率 —— 它决定「次日（今天）开不开新仓」。两边同日同规则，关闭就意味着今天都不该买。</div>'
+  }
+  return out
+}
+
+function consistencyBlock () {
+  var c = QMT.consistency
+  if (!c) return '<div class="crow"><span class="ck">参数一致性</span><span class="cv">未采集到</span></div>'
+  if (c.ok === null || c.error) return '<div class="crow"><span class="ck">参数一致性</span><span class="cv" style="color:#e0703a">校验失败：' + esc(String(c.error || '')) + '</span></div>'
+  var out = '<div class="crow"><span class="ck">参数一致性</span><span class="cv">' + c.matched + '/' + c.checked + ' 项与云端 config.json 相同'
+    + (c.errors ? '，<b style="color:#e0703a">' + c.errors + ' 项不一致</b>' : '') + '　<span style="color:var(--tx2);font-size:11px">校验于 ' + esc(c.at) + '</span></span>'
+    + (c.ok ? '<span style="color:var(--good);font-weight:600">✓ 同源</span>' : '<span style="color:#e0703a;font-weight:600">✗ 有分歧</span>') + '</div>'
+  ;(c.diffs || []).forEach(function (d) {
+    if (d.level === 'error') {
+      out += '<div class="cnote" style="color:#e0703a">✗ <b>' + esc(d.key) + '</b>：模拟 = ' + esc(JSON.stringify(d.js)) + '　QMT = ' + esc(JSON.stringify(d.qmt)) + '</div>'
+    } else if (d.note) {
+      out += '<div class="cnote">· ' + esc(d.key) + '：' + esc(d.note) + '</div>'
+    }
+  })
+  if (QMT.state && (QMT.state.pendingBuy || []).length) {
+    out += '<div class="cnote">QMT 待买队列 ' + QMT.state.pendingBuy.length + ' 只：'
+      + QMT.state.pendingBuy.map(function (p) { return esc(p.code) + '(#' + p.pickRank + ')' }).join('、')
+      + '　选股日 ' + esc(QMT.state.lastPickDate || '—') + '</div>'
+  }
+  if (QMT.logs && QMT.logs.length) {
+    out += '<div class="cnote" style="margin-top:6px"><b>QMT 策略日志（今日）</b><br>'
+      + QMT.logs.slice(-6).map(function (x) { return esc(x) }).join('<br>') + '</div>'
+  }
+  return out
+}
+
+/* ---------- 滚动验证：弱化为 M2 卡片里的一个小标签 ----------
+ * ★ 2026-10-16 用户要求：「方向成立」弱化显示，作为一个标签挂在 M2 跟随里，不显示那么多细节。
+ *   原实现是顶部整条常驻状态条（含「多窗口 5/10/20 日」「显著性检验需 2831 交易日」长文案）。
+ *   现改为：只在 M2 卡片「今日跟随」那一行右侧显示一个状态徽章 + 一句极简说明。
+ *   status 四档：green 方向成立 / watch 观察中 / degrade 建议降级 / insufficient 样本不足。
+ *   ★ 保留 rolling 数据获取本身（dashboard.json.rolling / LIVE.rolling），只改呈现。 */
+var ROLL_LBL = { green: '🟢 方向成立', watch: '🟡 观察中', degrade: '🔴 建议降级', insufficient: '⚪ 样本不足' }
+function rollingOf(d){
+  var rr = d && d.rolling
+  if(LIVE && LIVE.rolling && d && String(LIVE.bjDate) > String(d.date)) rr = LIVE.rolling
+  return rr || null
+}
+/* 返回一个小徽章（+可选一句说明）；无数据返回空串 */
+function rollTagHTML(d, withNote){
+  var rr = rollingOf(d)
+  if(!rr) return ''
+  var st = ROLL_LBL[rr.status] || ('⚪ '+(rr.status||'—'))
+  return '<span class="rolltag '+rr.status+'" title="滚动验证：每 20 交易日复检一次，监控这套跟随逻辑何时失效">'+st+'</span>'
+    + (withNote && rr.note ? '<span class="rollnote">'+esc(rr.note)+'</span>' : '')
+}
+
+function card(t, v, cl, m){
+  return '<div class="card"><div class="t">'+t+'</div><div class="v '+cl+'">'+v+'</div><div class="m">'+m+'</div></div>'
+}
+
+/* ---------- 主渲染 ---------- */
+function render(d){
+  DATA = d
+  var S = mergedStrategies()
+  if(!S.length) return
+  /* ★ 默认选中主策略；若 CUR 落在隐藏列表（M2/S2）或被删掉，回落到主策略 */
+  if(!stratById(CUR) || HIDE.indexOf(CUR) >= 0) CUR = (DATA.mainId && stratById(DATA.mainId)) ? DATA.mainId : visibleOf(S)[0].id
+  renderSide()
+  renderHero()
+  renderLive()
+  renderDetail()
+  renderSwitchInfo()
+  drawChart()
+}
+
+/* M2 切换轨迹（近 30 日变化点）
+ * ★ 位置：原先贴在「收益曲线」窗口按钮那一行，又长又挤（10 段轨迹把窗口按钮顶开）。
+ *   现改为渲染进 M2 详情卡片内，且默认折叠成一行摘要，点开才看全轨迹。 */
+function switchInfoHTML(){
+  var s = stratById('M2')
+  if(!s || !s.m2 || !s.m2.switches || s.m2.switches.length<2) return ''
+  var sw = s.m2.switches
+  var head = sw[0], tail = sw[sw.length-1]
+  var trace = sw.map(function(x){ return mmdd(x.date)+' '+x.name }).join(' → ')
+  return '<div class="swrow" id="swrow">'
+    + '<div class="swsum" id="swsum" title="M2 近 30 个交易日的跟随切换轨迹（只列变化点）：昨日收盘按近 10 日净值涨幅重新排名，最强者即今日执行">'
+    + '切换轨迹：<b>'+sw.length+'</b> 段 · 从 <b>'+head.name+'</b>（'+mmdd(head.date)+'）到 <b>'+tail.name+'</b>（'+mmdd(tail.date)+'）　<span class="swmore">展开 ▾</span></div>'
+    + '<div class="swfull" id="swfull" style="display:none">'+trace+'</div>'
+    + '</div>'
+}
+function renderSwitchInfo(){
+  /* 折叠/展开交互（详情区每次重渲后需重新绑定） */
+  var sum = document.getElementById('swsum')
+  if(sum) sum.onclick = function(){
+    var f = document.getElementById('swfull')
+    var open = f.style.display !== 'none'
+    f.style.display = open ? 'none' : 'block'
+    this.querySelector('.swmore').textContent = open ? '展开 ▾' : '收起 ▴'
+  }
+}
+
+/* ---------- 收益曲线（累计收益率 %；用全区间回放曲线，避免上线即空白） ---------- */
+function drawChart(){
+  var svg = document.getElementById('chart')
+  if(!DATA) return
+  var W = svg.clientWidth || 900, H = 250, padL = 52, padR = 14, padT = 14, padB = 26
+  var S = visibleOf(mergedStrategies())
+
+  /* ★ 2026-10-20 改：曲线默认只画「线上模拟」区间（daily = 上线日至今的真实模拟账户）。
+     旧行为画的是 curve（同参数 6 年历史回放），那是回测、不是模拟盘，还会撑爆 Y 轴。
+     两个模式：live = 模拟账户（默认）；replay = 历史回放（保留备查）。
+     ★ 盘中实时点已由 mergedStrategies 追加进 daily，live 模式天然包含今天。 */
+  var isLive = (MODE === 'live')
+  var series = S.map(function(s){
+    var pts, replay = false
+    if(isLive){
+      pts = (s.daily || []).slice()
+    }else{
+      var base = (s.curve && s.curve.length>1) ? s.curve : (s.daily||[])
+      replay = !!(s.curve && s.curve.length>1)
+      pts = base.slice()
+      /* 把 daily 里比 base 更新的点（= 盘中实时追加的当日点）并进来 */
+      if(s.live && s.daily && s.daily.length){
+        var have = Object.create(null); pts.forEach(function(p){ have[p.d]=1 })
+        s.daily.forEach(function(p){ if(!have[p.d]) pts.push(p) })
+      }
+    }
+    return { id:s.id, name:s.name, replay:replay,
+      pts: pts.map(function(e){ return { d:e.d, v:e.cr*100 } }) }
+  }).filter(function(s){ return s.pts.length })
+  /* 只画当前选中的策略（单策略聚焦），但保留其它策略的浅色底图做参照 */
+  var focus = series.filter(function(s){ return s.id===CUR })[0]
+  if(!focus || !focus.pts.length){ svg.innerHTML=''; return }
+
+  var dateSet = Object.create(null), allDates = []
+  series.forEach(function(s){ s.pts.forEach(function(p){ if(!dateSet[p.d]){ dateSet[p.d]=1; allDates.push(p.d) } }) })
+  if(!allDates.length){ svg.innerHTML=''; return }
+  allDates.sort()
+  /* live 模式只有上线至今几个交易日，不做窗口裁剪（裁了就没图）；窗口按钮只在 replay 模式可用 */
+  var from = (!isLive && WIN>0) ? Math.max(0, allDates.length-WIN) : 0
+  var view = allDates.slice(from)
+  var xi = Object.create(null); view.forEach(function(d,i){ xi[d]=i })
+  var n = view.length
+
+  /* 窗口内重新归一（每条曲线起点 = 0%）。
+     replay 模式：S3 六年回放 +4600% 会把 Y 轴撑到几千个百分点，窗口内其它策略被压成贴底细线。
+     live 模式：正常策略首点本就是 0（等于没变）；但 M2 这类「本金口径不同」的对照策略
+     首点 cr 是 −80%，归一后才是它相对上线日的真实走势，不会把 Y 轴拽到 −80%。 */
+  series.forEach(function(s){
+    var inV = s.pts.filter(function(p){ return xi[p.d]!=null })
+    if(!inV.length) return
+    var denom = Math.max(1 + inV[0].v/100, 0.001)   // 防 cr ≤ −100% 时除零
+    s.pts = s.pts.map(function(p){
+      return xi[p.d]==null ? p : { d:p.d, v:((1+p.v/100)/denom-1)*100 }
+    })
+  })
+
+  /* Y 轴范围：以「当前选中策略」的走势为主（含 0 轴），不放任其它策略把它拉爆。
+     旧做法取所有曲线的 min/max —— M2 这类对照策略某天 −15%，会把 E1 的 5 个点压成 10px 一条。
+     超出范围内的底图曲线由 clipPath 裁掉，不会画到框外。 */
+  var fvals = focus.pts.filter(function(p){ return xi[p.d]!=null }).map(function(p){ return p.v })
+  var fmin = Math.min.apply(null, fvals), fmax = Math.max.apply(null, fvals)
+  var mn = Math.min(0, fmin), mx = Math.max(0, fmax)
+  var pad = Math.max((mx-mn)*0.30, 0.25); mn-=pad; mx+=pad
+  var X = function(i){ return padL + (n<2 ? 0 : (W-padL-padR)*i/(n-1)) }
+  var Y = function(v){ return padT + (H-padT-padB)*(mx-v)/(mx-mn) }
+
+  var g = '<defs><clipPath id="cclip"><rect x="'+padL+'" y="'+padT+'" width="'+(W-padL-padR)+'" height="'+(H-padT-padB)+'"/></clipPath></defs>'
+    + '<rect x="0" y="0" width="'+W+'" height="'+H+'" fill="#161e2e" rx="8"/>'
+  for(var k=0;k<=4;k++){
+    var vv = mn + (mx-mn)*k/4, yy = Y(vv)
+    g += '<line x1="'+padL+'" y1="'+yy+'" x2="'+(W-padR)+'" y2="'+yy+'" stroke="#2a3550" stroke-width="1"'+(Math.abs(vv)<1e-9?' stroke-dasharray="4 3"':'')+'/>'
+      + '<text x="'+(padL-6)+'" y="'+(yy+4)+'" fill="#8fa0bf" font-size="11" text-anchor="end">'+vv.toFixed(1)+'%</text>'
+  }
+  var lbl = [0, Math.floor((n-1)/2), n-1]
+  lbl.forEach(function(gi,li){
+    var dd = view[gi]; if(!dd) return
+    g += '<text x="'+X(gi)+'" y="'+(H-8)+'" fill="#8fa0bf" font-size="11" text-anchor="'+(li===0?'start':(li===2?'end':'middle'))+'">'+mmdd(dd)+'</text>'
+  })
+
+  /* 底图：其它策略（细、半透明）；与主图一起被裁剪在绘图区内 */
+  g += '<g clip-path="url(#cclip)">'
+  series.forEach(function(s){
+    if(s.id===CUR) return
+    var pts = s.pts.filter(function(p){ return xi[p.d]!=null })
+    if(!pts.length) return
+    var path = pts.map(function(p,i){ return (i?'L':'M')+X(xi[p.d]).toFixed(1)+' '+Y(p.v).toFixed(1) }).join(' ')
+    g += '<path d="'+path+'" fill="none" stroke="'+colorOf(s.id)+'" stroke-width="1" opacity=".28" stroke-linejoin="round"/>'
+  })
+  /* 主图：当前选中策略 */
+  var fpts = focus.pts.filter(function(p){ return xi[p.d]!=null })
+  var fpath = fpts.map(function(p,i){ return (i?'L':'M')+X(xi[p.d]).toFixed(1)+' '+Y(p.v).toFixed(1) }).join(' ')
+  var fc = colorOf(focus.id)
+  /* 回放段用虚线前缀提示（整条都是回放则整体虚线） */
+  g += '<path d="'+fpath+'" fill="none" stroke="'+fc+'" stroke-width="2.2" stroke-linejoin="round"'+(focus.replay?' stroke-dasharray="6 3"':'')+'/>'
+  g += '</g>'
+  var last = fpts[fpts.length-1]
+  g += '<circle cx="'+X(xi[last.d])+' cy="'+Y(last.v)+'" r="3.5" fill="'+fc+'"/>'
+    + '<text x="'+(X(xi[last.d])-6)+'" y="'+(Y(last.v)-8)+'" fill="'+fc+'" font-size="11" text-anchor="end" font-weight="600">'+pct(last.v/100)+'</text>'
+
+  /* 线上模拟只有 1 个交易日时画不出线（单点），给明确文字而不是一片空白 */
+  if(n < 2){
+    g += '<text x="'+(W/2)+'" y="'+(H/2+20)+'" fill="#8fa0bf" font-size="13" text-anchor="middle">'
+      + '线上模拟仅 '+n+' 个交易日（'+(DATA.startDate||'')+' 起）：首日累计 '+pct(last.v/100)+'，收盘后自动出线</text>'
+  }
+  svg.setAttribute('viewBox','0 0 '+W+' '+H)
+  svg.innerHTML = g
+
+  var sub = isLive
+    ? (n<2 ? '线上模拟第 1 个交易日（'+(DATA.startDate||'')+' 起）'
+           : '线上模拟实测 · '+n+' 个交易日（'+(DATA.startDate||'')+' 起，起点归一 0%）')
+    : '历史回放 · 窗口内收益（各曲线起点归一 0%，窗口起点 '+mmdd(view[0])+'）'
+  document.getElementById('chartTitle').innerHTML = focus.id+' · '+displayName(focus)+'　<small>'+sub+'</small>'
+  document.getElementById('legend').innerHTML =
+    '<span>'+(focus.replay?'<i style="background:repeating-linear-gradient(90deg,'+fc+' 0 6px,transparent 6px 9px)"></i>':'<i style="background:'+fc+'"></i>')+focus.id+(isLive?'（模拟盘）':'（回放）')+'</span>'
+    + series.filter(function(s){ return s.id!==CUR }).map(function(s){ return '<span><i style="background:'+colorOf(s.id)+';opacity:.45"></i>'+s.id+'</span>' }).join('')
+  /* ★ 原「曲线下方橙色长框」已移除（内容与底部「曲线口径」重复、手机上占地）。
+     这里只把动态项（回放真实起点/交易日数）回填到底部说明里，保持单一处、不重复。 */
+  var fsEl = document.getElementById('fStart'), frEl = document.getElementById('fReplay')
+  if(fsEl) fsEl.textContent = DATA.startDate || '—'
+  if(frEl) frEl.textContent = DATA.replayStart || '—'
+}
+
+/* 模式切换（线上模拟 / 历史回放）与窗口切换分开绑定：
+   旧版把所有 .winbar button 都当窗口按钮，加了模式按钮后点「线上模拟」会把 WIN 变成 NaN */
+document.querySelectorAll('.winbar button').forEach(function(b){
+  if(b.dataset.m){
+    b.onclick = function(){
+      document.querySelectorAll('.winbar button[data-m]').forEach(function(x){ x.classList.remove('on') })
+      this.classList.add('on')
+      MODE = this.dataset.m
+      var ww = document.getElementById('winwrap')
+      if(ww) ww.style.display = (MODE==='replay') ? 'inline-flex' : 'none'
+      drawChart()
+    }
+  }else{
+    b.onclick = function(){
+      document.querySelectorAll('.winbar button[data-w]').forEach(function(x){ x.classList.remove('on') })
+      this.classList.add('on'); WIN = +this.dataset.w; drawChart()
+    }
+  }
+})
+window.addEventListener('resize', function(){
+  if(DATA) drawChart()
+  /* ★ 从手机宽度转回 PC 宽度时，抽屉的 open 状态会遗留（overflow 锁死、遮罩残留）⇒ 强制收干净 */
+  if(window.innerWidth > 900 && sideIsOpen()) closeSide()
+})
+
+/* ---------- 移动端抽屉事件 ---------- */
+document.getElementById('menubtn').onclick = function(){ sideIsOpen() ? closeSide() : openSide() }
+document.getElementById('scrim').onclick = closeSide
+document.getElementById('sideclose').onclick = closeSide
+document.addEventListener('keydown', function(e){ if(e.key === 'Escape' && sideIsOpen()) closeSide() })
+
+/* ★ S3 体检状态条（data/health.json 由 s3-health.js 每日收盘后生成） */
+function loadHealthBar(){
+  fetch('./data/health.json?_='+Date.now(), {cache:'no-store'}).then(function(r){ return r.ok ? r.json() : null })
+    .then(function(j){
+      if(!j || !j.status) return
+      var col = j.status==='green' ? '#3ddc97' : (j.status==='watch' ? '#f0a04a' : '#f04a4a')
+      var el = document.getElementById('healthbar')
+      el.style.display = 'flex'
+      var led = document.getElementById('hbled')
+      led.style.background = col
+      led.style.boxShadow = '0 0 0 3px '+col+'22'
+      var txt = 'S3 体检 · <b style="color:'+col+'">'+j.statusText+'</b>（数据截至 '+j.date+'，连续第 '+j.consecutive+' 次）'
+      if(j.counts.red) txt += ' · <span style="color:#f04a4a">红线 '+j.counts.red+' 项</span>'
+      else if(j.counts.watch) txt += ' · <span style="color:#f0a04a">观察 '+j.counts.watch+' 项</span>'
+      document.getElementById('hbtxt').innerHTML = txt
+    }).catch(function(){ /* 体检文件缺失不打扰看板 */ })
+}
+
+loadLive()
+loadQmt()
+loadMinuteChart()
+loadSeries()
+loadHealthBar()
+setInterval(loadLive, 60000)
+/* ★ 2026-10-21：行情独立 30 秒一刷（不跟 60 秒的静态帧走），见 applyQuotes 注释 */
+setInterval(applyQuotes, 30000)
+setInterval(loadSeries, 60000)
+/* QMT 采集帧 10 分钟才更新一次，但页面 60 秒查一次「有没有新帧」成本很低，且能第一时间发现变新 */
+setInterval(loadQmt, 60000)
+setInterval(applyQmtQuotes, 30000)
+fetchJSON()
+</script>
+</body>
+</html>
