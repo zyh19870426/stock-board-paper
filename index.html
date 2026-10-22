@@ -221,7 +221,12 @@
 .auxsec{margin:0 0 18px;border:1px solid var(--line,#2a2a2a);border-radius:12px;overflow:hidden;background:var(--panel,#141414)}
 .auxhd{font-size:14px;font-weight:600;padding:10px 14px;background:var(--panel2,#1c1c1c);border-bottom:1px solid var(--line,#2a2a2a);color:var(--tx,#eee)}
 .auxsec .live{margin:12px}
-</style>
+/* 数据时效横幅 */
+#dataAge{display:none;margin:0 0 14px;padding:11px 14px;border-radius:12px;font-size:13px;line-height:1.5;font-weight:600}
+#dataAge .a-sub{font-weight:400;opacity:.85;font-size:12px}
+#dataAge.ok{display:block;background:rgba(46,160,67,.12);border:1px solid rgba(46,160,67,.4);color:#5fd17e}
+#dataAge.warn{display:block;background:rgba(210,153,34,.14);border:1px solid rgba(210,153,34,.5);color:#e8b54e}
+#dataAge.bad{display:block;background:rgba(220,60,60,.14);border:1px solid rgba(220,60,60,.55);color:#ff8080}
 </head>
 <body>
 
@@ -254,6 +259,9 @@
   <main class="main">
     <!-- QMT 策略健康横幅：只在 status!=ok 时由脚本显示 -->
     <div id="qmtHealth" style="display:none"></div>
+
+    <!-- ★ 数据时效横幅：看板停更时主动变黄/变红，避免"几天后才发现没更新" -->
+    <div id="dataAge" style="display:none"></div>
 
     <!-- ============ 主页视图：KPI + 收益曲线 + 持仓操作核心 ============ -->
     <div id="mainview">
@@ -626,6 +634,40 @@ function renderHero(){
   h += card('总资产'+liveTagOf(s), fmtYuan(s.totalC)+' 元', '', '现金＋市值')
   h += card('胜率 / 笔数', s.tradeCount ? (s.winRate*100).toFixed(1)+'% / '+s.tradeCount+' 笔' : '—', '', '最大回撤 '+(s.maxDrawdown*100).toFixed(2)+'%')
   document.getElementById('kpi').innerHTML = h
+}
+
+/* ---------- 数据时效横幅：把"停更"从静默变成一眼可见 ---------- */
+function renderDataAge(){
+  var box = document.getElementById('dataAge')
+  if(!DATA || !DATA.date){ box.style.display = 'none'; return }
+  /* 北京今天（按日期，忽略时分）；交易日滞后数 = DATA.date 次日 ~ 昨天之间的工作日数
+     （不含今天，因为今天盘中/未收盘时 DATA.date 本就该是昨天，属正常） */
+  var now = new Date()
+  var bj = new Date(now.getTime() + now.getTimezoneOffset() * 60000 + 8 * 3600000)
+  var yest = new Date(bj.getTime()); yest.setDate(yest.getDate() - 1)
+  var d = new Date(DATA.date + 'T00:00:00+08:00')
+  var cnt = 0
+  var cur = new Date(d.getTime()); cur.setDate(cur.getDate() + 1)
+  while(cur <= yest){
+    var wd = cur.getDay()
+    if(wd !== 0 && wd !== 6) cnt++
+    cur.setDate(cur.getDate() + 1)
+  }
+  var updated = DATA.updated ? new Date(DATA.updated).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '未知'
+  if(cnt <= 0){
+    box.className = 'ok'
+    box.innerHTML = '✅ 数据正常：截至 <b>' + cnDate(DATA.date) + '</b> 收盘 · 更新于 ' + updated
+      + '。盘中顶部数字为实时预演，以收盘为准。'
+  } else if(cnt === 1){
+    box.className = 'warn'
+    box.innerHTML = '⚠️ 数据滞后 <b>1</b> 个交易日（仍停在 ' + cnDate(DATA.date) + ' 收盘）。'
+      + '若已过了收盘时段仍未见更新，请检查云端 daily-paper 是否运行、本地同步是否覆盖。'
+  } else {
+    box.className = 'bad'
+    box.innerHTML = '🔴 数据已滞后 <b>' + cnt + '</b> 个交易日（仍停在 ' + cnDate(DATA.date) + ' 收盘）。看板疑似停更！'
+      + '排查：① 云端 daily-paper 运行记录；② 本地 push-github.js 是否手动 GH_ONLY 推了 data/（已默认禁止）覆盖云端。'
+  }
+  box.style.display = 'block'
 }
 
 /* ---------- 当日盈亏走势（盘中快照序列，最近 10 个交易日可切换） ---------- */
@@ -1670,6 +1712,7 @@ function render(d){
   if(!stratById(CUR) || HIDE.indexOf(CUR) >= 0) CUR = (DATA.mainId && stratById(DATA.mainId)) ? DATA.mainId : visibleOf(S)[0].id
   renderSide()
   renderHero()
+  renderDataAge()
   renderLive()
   renderDetail('main')
   renderDetail('aux')
