@@ -213,6 +213,14 @@
   /* 抽屉关闭按钮在 PC 端隐藏 */
   .side .sclose{display:none}
   @media(max-width:900px){ .side .sclose{display:flex} }
+/* 侧边栏：视图切换入口 */
+.sview{display:flex;gap:6px;padding:0 12px 10px}
+.sview button{font:inherit;font-size:12px;padding:6px 8px;border-radius:8px;border:1px solid var(--line,#2a2a2a);background:var(--panel,#141414);color:var(--tx2,#999);cursor:pointer;flex:1;transition:.15s}
+.sview button.on{background:rgba(74,163,240,.16);border-color:#4aa3f0;color:#4aa3f0;font-weight:600}
+/* 辅助信息分区 */
+.auxsec{margin:0 0 18px;border:1px solid var(--line,#2a2a2a);border-radius:12px;overflow:hidden;background:var(--panel,#141414)}
+.auxhd{font-size:14px;font-weight:600;padding:10px 14px;background:var(--panel2,#1c1c1c);border-bottom:1px solid var(--line,#2a2a2a);color:var(--tx,#eee)}
+.auxsec .live{margin:12px}
 </style>
 </head>
 <body>
@@ -246,42 +254,61 @@
   <main class="main">
     <!-- QMT 策略健康横幅：只在 status!=ok 时由脚本显示 -->
     <div id="qmtHealth" style="display:none"></div>
-    <div class="hero">
-      <div class="h1">
-        <h1 id="ptitle">打板模拟跟进</h1>
-        <span id="pbadge"></span>
+
+    <!-- ============ 主页视图：KPI + 收益曲线 + 持仓操作核心 ============ -->
+    <div id="mainview">
+      <div class="hero">
+        <div class="h1">
+          <h1 id="ptitle">打板模拟跟进</h1>
+          <span id="pbadge"></span>
+        </div>
+        <div class="sub" id="sub">加载中…</div>
+        <div id="err"></div>
+        <div class="kpi" id="kpi"></div>
       </div>
-      <div class="sub" id="sub">加载中…</div>
-      <div id="err"></div>
-      <div class="kpi" id="kpi"></div>
-    </div>
 
-    <div class="live" id="live" style="display:none"></div>
-
-    <!-- QMT 实盘（data/qmt-live.json，由 qmt/_snapshot_qmt.py 定时采集后推送） -->
-    <div class="live" id="qmt" style="display:none"></div>
-
-    <!-- 收益曲线 -->
-    <div class="winbar">
-      <span class="wt">收益曲线</span>
-      <button data-m="live" class="on">线上模拟</button>
-      <button data-m="replay">历史回放</button>
-      <span id="winwrap" style="display:none;gap:7px;align-items:center">
-        <button data-w="7">7天</button><button data-w="30" class="on">30天</button>
-        <button data-w="60">60天</button><button data-w="90">90天</button>
-        <button data-w="0">全部</button>
-      </span>
-    </div>
-    <div class="chartbox">
-      <div class="chead">
-        <span class="cl" id="chartTitle">累计收益率</span>
-        <span class="legend" id="legend"></span>
+      <!-- 收益曲线 -->
+      <div class="winbar">
+        <span class="wt">收益曲线</span>
+        <button data-m="live" class="on">线上模拟</button>
+        <button data-m="replay">历史回放</button>
+        <span id="winwrap" style="display:none;gap:7px;align-items:center">
+          <button data-w="7">7天</button><button data-w="30" class="on">30天</button>
+          <button data-w="60">60天</button><button data-w="90">90天</button>
+          <button data-w="0">全部</button>
+        </span>
       </div>
-      <svg id="chart" width="100%" height="250" preserveAspectRatio="none"></svg>
+      <div class="chartbox">
+        <div class="chead">
+          <span class="cl" id="chartTitle">累计收益率</span>
+          <span class="legend" id="legend"></span>
+        </div>
+        <svg id="chart" width="100%" height="250" preserveAspectRatio="none"></svg>
+      </div>
+
+      <!-- 详情区（随侧边栏切换）：持仓 / 今日成交 / 明日计划 / 分时 / 成交明细 -->
+      <div id="detail"></div>
     </div>
 
-    <!-- 详情区（随侧边栏切换） -->
-    <div id="detail"></div>
+    <!-- ============ 辅助信息视图：实盘 / 模拟 / 风控 / 走势 / 战绩 ============ -->
+    <div id="aux" style="display:none">
+      <section class="auxsec">
+        <div class="auxhd">主策略详情 · 风控 / 当日盈亏走势 / 样本外战绩</div>
+        <div id="aux-detail"></div>
+      </section>
+      <section class="auxsec">
+        <div class="auxhd">QMT 实盘</div>
+        <div class="live" id="aux-qmt" style="display:none"></div>
+      </section>
+      <section class="auxsec">
+        <div class="auxhd">云端模拟 · 实时（当前策略）</div>
+        <div class="live" id="aux-live" style="display:none"></div>
+      </section>
+      <section class="auxsec">
+        <div class="auxhd">云端模拟对比 · QMT 实盘 vs 云端模拟账（E1）</div>
+        <div id="aux-cmp"></div>
+      </section>
+    </div>
   </main>
 </div>
 
@@ -297,6 +324,23 @@ var MODE = 'live'
    数据仍留在 dashboard.json 里，随时可放出来。 */
 var HIDE = ['M2', 'S2', 'S3']
 function visibleOf (S) { return (S || []).filter(function (s) { return HIDE.indexOf(s.id) < 0 }) }
+/* ★ 2026-10-22：视图切换。
+   'main' = 看板主页（KPI + 收益曲线 + 主策略详情的持仓/成交/计划/分时核心）；
+   'aux'  = 辅助信息页（主策略详情的风控/当日盈亏走势/样本外战绩 + QMT 实盘 + 云端模拟实时 + 云端模拟对比）。
+   入口在侧边栏顶部「视图」分组。 */
+var VIEW = 'main'
+function setView (v) {
+  VIEW = v
+  document.getElementById('mainview').style.display = v === 'main' ? '' : 'none'
+  document.getElementById('aux').style.display = v === 'aux' ? '' : 'none'
+  var btns = document.querySelectorAll('#sview button')
+  for (var i = 0; i < btns.length; i++) btns[i].classList.toggle('on', btns[i].dataset.view === v)
+}
+;(function () {
+  var sv = document.getElementById('sview')
+  if (sv) sv.querySelectorAll('button').forEach(function (b) { b.onclick = function () { setView(b.dataset.view) } })
+  setView('main')
+})()
 var PAL = ['#c084fc', '#4aa3f0', '#f0a04a', '#4dd0a0', '#f472b6', '#facc15', '#38bdf8', '#fb923c']
 var IDS = []
 function colorOf (id) {
@@ -444,9 +488,9 @@ function loadLive(){
    auction-log.json 记录 09:20–09:25 竞价参考价与 09:30 后实际成交价的差额。 */
 function loadSeries(){
   fetch('./data/intraday-series.json?_='+Date.now(), {cache:'no-store'}).then(function(r){ return r.ok ? r.json() : null })
-    .then(function(j){ ISER = j; if(DATA) renderDetail() }).catch(function(){ /* 缺失不影响看板 */ })
+    .then(function(j){ ISER = j; if(DATA){ renderDetail('main'); renderDetail('aux') } }).catch(function(){ /* 缺失不影响看板 */ })
   fetch('./data/auction-log.json?_='+Date.now(), {cache:'no-store'}).then(function(r){ return r.ok ? r.json() : null })
-    .then(function(j){ AUCTION = j; if(DATA) renderDetail() }).catch(function(){ /* 缺失不影响看板 */ })
+    .then(function(j){ AUCTION = j; if(DATA){ renderDetail('main'); renderDetail('aux') } }).catch(function(){ /* 缺失不影响看板 */ })
 }
 /* ★ 当日分时序列（画「今日操作股票」的分时图）。
    文件由每日收盘任务采集（lib/minute-chart.js），只留最近 8 个交易日。
@@ -462,7 +506,7 @@ function loadMinuteChart(){
     .then(function(r){ return r.ok ? r.json() : null })
     .then(function(j){ MTRADE = (j && Array.isArray(j.rows)) ? j : null })
     .catch(function(){ MTRADE = null })
-  Promise.all([a,b]).then(function(){ if(DATA) renderDetail() })
+  Promise.all([a,b]).then(function(){ if(DATA){ renderDetail('main'); renderDetail('aux') } })
 }
 
 /* ★ 盘中实时并入：LIVE 快照比正式看板新一个交易日时，顶部数字用实时值并标 ⚡实时。
@@ -542,7 +586,7 @@ function renderSide(){
     el.onclick = function(){
       CUR = this.dataset.id
       var mc = document.getElementById('menucur'); if(mc) mc.textContent = CUR
-      renderSide(); renderHero(); renderLive(); renderDetail(); drawChart()
+      renderSide(); renderHero(); renderLive(); renderDetail('main'); renderDetail('aux'); renderQmt(); drawChart()
       closeSide()          /* ★ 手机上选完自动收起抽屉，让详情立刻可见 */
     }
   })
@@ -589,7 +633,7 @@ function renderHero(){
 }
 
 /* ---------- 当日盈亏走势（盘中快照序列，最近 10 个交易日可切换） ---------- */
-function setIDay(d){ IDAY = d; renderDetail() }
+function setIDay(d){ IDAY = d; renderDetail('aux') }
 function intradaySeriesHTML(sid){
   if(!ISER || !ISER.days) return ''
   var days = Object.keys(ISER.days).sort().slice(-10)
@@ -842,10 +886,47 @@ function whyNoBuyHTML(s){
   return h
 }
 
-function renderDetail(){
+function renderDetail(where){
   var s = stratById(CUR)
-  if(!s){ document.getElementById('detail').innerHTML=''; return }
+  var box = document.getElementById(where==='aux' ? 'aux-detail' : 'detail')
+  if(!s){ box.innerHTML=''; return }
   var c = colorOf(s.id)
+
+  /* ★ 2026-10-22：辅助信息视图只渲染「风控状态 + 当日盈亏走势 + 样本外战绩」三张卡 */
+  if(where==='aux'){
+    var ha = '<div class="stitle" style="border-color:'+c+'">'+s.id+' · '+displayName(s)+' · 风控 / 当日盈亏走势 / 样本外战绩'
+      + (s.brief ? '<small>'+esc(s.brief)+'</small>' : '') + '</div>'
+    if(s.risk && s.id!=='M1'){
+      var rk = s.risk
+      var perSlot = Math.round(s.totalC / (rk.slots || 1) / 100)
+      var gateHTML = rk.gatedDays
+        ? (rk.gateToday
+            ? '<span class="tag sk">🚫 今日过热 → 明日不开新仓</span>'
+            : '<span class="tag b">✅ 今日正常，可开新仓</span>')
+          + '<span style="color:var(--tx2);font-size:11px">　自上线以来累计拦截 ' + rk.gatedDays + ' 个交易日</span>'
+        : '<span style="color:var(--tx2);font-size:11px">本策略未启用情绪闸门</span>'
+      var ddHTML = (rk.ddTriggerCount || rk.ddPauseToday)
+        ? (rk.ddPauseToday
+            ? '<span class="tag sk">⏸ 回撤熔断中：还剩 ' + rk.ddPauseLeft + ' 个交易日不开新仓</span>'
+            : '<span class="tag b">✅ 未停手</span>')
+          + '<span style="color:var(--tx2);font-size:11px">　历史触发 ' + rk.ddTriggerCount + ' 次</span>'
+        : '<span class="tag b">✅ 未停手</span><span style="color:var(--tx2);font-size:11px">　本策略未启用回撤熔断</span>'
+      ha += '<div class="cards" style="display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:12px"><div class="card" style="background:var(--panel)">'
+        + '<div class="t">风控状态 · 人为跟随</div>'
+        + '<div class="m">' + gateHTML + '</div>'
+        + '<div class="m" style="margin-top:3px">' + ddHTML + '</div>'
+        + '<div class="m" style="margin-top:3px">每份约 <b>' + perSlot.toLocaleString() + ' 元</b>'
+          + '　·　风险控制：止损 / 回撤 / 持有上限（参数不公开）</div>'
+        + '</div></div>'
+    }
+    var ish = intradaySeriesHTML(s.id)
+    if(ish) ha += '<div style="margin:14px 0 4px">'+ish+'</div>'
+    var lsh = liveStatsHTML(s)
+    if(lsh) ha += '<div style="margin:14px 0 4px">'+lsh+'</div>'
+    box.innerHTML = ha
+    return
+  }
+
   var refTag = s.id === 'M1'
     ? '<span class="tag b" style="font-size:10px;padding:0 5px;margin-left:6px">组合引擎</span>'
     : (s.isRef ? '<span class="tag sk" style="font-size:10px;padding:0 5px;margin-left:6px">对照组 · 不作为操作依据</span>' : '<span class="tag b" style="font-size:10px;padding:0 5px;margin-left:6px">主策略</span>')
@@ -893,40 +974,7 @@ function renderDetail(){
   /* ★ 今日决策 / 为什么没买（2026-10-21 用户要求：不买的时候要看得到原因） */
   if(s.risk && s.id !== 'M1') h += whyNoBuyHTML(s)
 
-  /* ★ 风控状态（人为跟随专用）：情绪闸门 / 回撤熔断 / 止损线 / 每份金额
-     数据来自 dashboard.json 的 risk 字段，由 lib/sim.js 每套策略统一输出。
-     ★ M1 走上面那张卡，不进这里（它的 risk 字段没有 stopLossPct/trailPct）。 */
-  if(s.risk && s.id !== 'M1'){
-    var rk = s.risk
-    var perSlot = Math.round(s.totalC / (rk.slots || 1) / 100)
-    var gateHTML = rk.gatedDays
-      ? (rk.gateToday
-          ? '<span class="tag sk">🚫 今日过热 → 明日不开新仓</span>'
-          : '<span class="tag b">✅ 今日正常，可开新仓</span>')
-        + '<span style="color:var(--tx2);font-size:11px">　自上线以来累计拦截 ' + rk.gatedDays + ' 个交易日</span>'
-      : '<span style="color:var(--tx2);font-size:11px">本策略未启用情绪闸门</span>'
-    var ddHTML = (rk.ddTriggerCount || rk.ddPauseToday)
-      ? (rk.ddPauseToday
-          ? '<span class="tag sk">⏸ 回撤熔断中：还剩 ' + rk.ddPauseLeft + ' 个交易日不开新仓</span>'
-          : '<span class="tag b">✅ 未停手</span>')
-        + '<span style="color:var(--tx2);font-size:11px">　历史触发 ' + rk.ddTriggerCount + ' 次</span>'
-      : '<span class="tag b">✅ 未停手</span><span style="color:var(--tx2);font-size:11px">　本策略未启用回撤熔断</span>'
-    h += '<div class="cards" style="display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:12px"><div class="card" style="background:var(--panel)">'
-      + '<div class="t">风控状态 · 人为跟随</div>'
-      + '<div class="m">' + gateHTML + '</div>'
-      + '<div class="m" style="margin-top:3px">' + ddHTML + '</div>'
-      + '<div class="m" style="margin-top:3px">每份约 <b>' + perSlot.toLocaleString() + ' 元</b>'
-        + '　·　风险控制：止损 / 回撤 / 持有上限（参数不公开）</div>'
-      + '</div></div>'
-  }
-
-  /* 当日盈亏走势（盘中快照序列） */
-  var ish = intradaySeriesHTML(s.id)
-  if(ish) h += '<div style="margin:14px 0 4px">'+ish+'</div>'
-
-  /* 样本外战绩（永久台账统计） */
-  var lsh = liveStatsHTML(s)
-  if(lsh) h += '<div style="margin:14px 0 4px">'+lsh+'</div>'
+  /* ★ 2026-10-22：风控状态 / 当日盈亏走势 / 样本外战绩 三块已移至辅助信息页（renderDetail('aux')） */
 
   /* 今日持仓 */
   h += '<div class="stitle" style="border-color:'+c+';font-size:13px">今日持仓'+(s.positions&&s.positions.length?'（'+s.positions.length+' 只）':'')+'</div>'
@@ -1077,7 +1125,7 @@ function renderDetail(){
     h += '<div class="empty">暂无成交 —— 模拟盘 '+DATA.startDate+' 启动，首笔买入在下一交易日开盘执行</div>'
   }
 
-  document.getElementById('detail').innerHTML = h
+  box.innerHTML = h
 }
 
 /* ================= 今日分时图（SVG） =================
@@ -1393,7 +1441,7 @@ function tradeChartsHTML(evs){
 
 /* ---------- 盘中实时面板（顶部，只显当前选中策略） ---------- */
 function renderLive(){
-  var box = document.getElementById('live')
+  var box = document.getElementById('aux-live')
   if(!LIVE || LIVE.phase==='holiday'){ box.style.display='none'; return }
   var lv = null
   ;(LIVE.strategies||[]).forEach(function(x){ if(x.id===CUR) lv = x })
@@ -1504,8 +1552,8 @@ function qmtDate8 () {
 }
 
 function renderQmt () {
-  var box = document.getElementById('qmt')
-  if (!QMT) { box.style.display = 'none'; return }
+  var box = document.getElementById('aux-qmt')
+  if (!QMT) { box.style.display = 'none'; var c0 = document.getElementById('aux-cmp'); if (c0) c0.style.display = 'none'; return }
   var a = QMT.account || {}
   var age = qmtAgeMin()
   var staleDay = qmtDate8() !== bjToday().replace(/-/g, '')
@@ -1565,13 +1613,14 @@ function renderQmt () {
   }
   h += '</div></div>'
 
-  /* ---- 与云端模拟账对比 + 策略一致性 ---- */
-  h += '<div class="qmt-cmp"><div class="qchd">与云端模拟账（E1）对比</div>'
-  h += compareRows()
-  h += consistencyBlock()
-  h += '</div>'
   box.innerHTML = h
   box.style.display = 'block'
+
+  /* ---- 与云端模拟账对比 + 策略一致性（独立渲染到辅助信息页的对比区） ---- */
+  var cmp = document.getElementById('aux-cmp')
+  cmp.innerHTML = '<div class="qmt-cmp"><div class="qchd">与云端模拟账（E1）对比</div>'
+    + compareRows() + consistencyBlock() + '</div>'
+  cmp.style.display = 'block'
 }
 
 /* 对比：持仓 / 今日成交 / 情绪闸门。
@@ -1670,7 +1719,9 @@ function render(d){
   renderSide()
   renderHero()
   renderLive()
-  renderDetail()
+  renderDetail('main')
+  renderDetail('aux')
+  renderQmt()
   renderSwitchInfo()
   drawChart()
 }
