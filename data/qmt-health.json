@@ -1,1 +1,1 @@
-{"ok":true,"status":"ok","headline":"QMT 正常运行","checkedAt":"2026-10-22 19:00:01","date":"2026-10-22","qmtRunning":true,"logExists":true,"lastLogAt":"18:40:03","lastLogAgeMin":19,"lines":48,"nError":0,"nWarn":0,"alerts":[],"detail":[]}
+{"ok":false,"status":"error","headline":"发现故障，需处理","checkedAt":"2026-10-22 19:10:02","date":"2026-10-22","qmtRunning":false,"logExists":true,"lastLogAt":"18:40:03","lastLogAgeMin":29,"lines":48,"nError":0,"nWarn":0,"alerts":[{"level":"error","code":"QMT_DOWN","msg":"QMT 客户端进程不存在（XtItClient.exe）"}],"detail":[]}
