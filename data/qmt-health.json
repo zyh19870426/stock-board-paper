@@ -1,1 +1,1 @@
-{"ok":true,"status":"ok","headline":"QMT 正常运行","checkedAt":"2026-10-22 18:00:02","date":"2026-10-22","qmtRunning":true,"logExists":true,"lastLogAt":"15:05:02","lastLogAgeMin":175,"lines":39,"nError":0,"nWarn":0,"alerts":[],"detail":[]}
+{"ok":true,"status":"ok","headline":"QMT 正常运行","checkedAt":"2026-10-22 18:30:02","date":"2026-10-22","qmtRunning":true,"logExists":true,"lastLogAt":"15:05:02","lastLogAgeMin":205,"lines":39,"nError":0,"nWarn":0,"alerts":[],"detail":[]}
