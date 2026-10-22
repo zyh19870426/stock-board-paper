@@ -448,7 +448,6 @@ function applyQuotes(){
 var MCHART = null          /* 当日分时序列（data/minute-chart.json），画「今日操作股票」的分时图 */
 var MTRADE = null          /* 成交明细专用分时（data/minute-trade.json），按 code+date 精确取，回填近 20 个交易日 */
 var ISER = null            /* 盘中净值序列（data/intraday-series.json）：最近 10 个交易日、每 15 分钟一帧 */
-var AUCTION = null         /* 集合竞价对照（data/auction-log.json）：竞价参考价 → 实际成交价 */
 var IDAY = null            /* 盘中曲线当前查看的日期（默认最新一天） */
 
 /* ---------- 数据拉取 ---------- */
@@ -483,14 +482,11 @@ function loadLive(){
   fetch('./data/intraday.json?_='+Date.now(), {cache:'no-store'}).then(r=> r.ok ? r.json() : null)
     .then(function(j){ LIVE = j; applyQuotes(); renderLive(); if(DATA) render(DATA); if(QMT) renderQmt() }).catch(function(){ /* 保留上一次 */ })
 }
-/* ★ 盘中净值序列 + 竞价对照（2026-10-19 用户要求）
-   intraday-series.json 只增不删、保留最近 10 个交易日 ⇒ 收盘后也一直能看当日盈亏怎么变的；
-   auction-log.json 记录 09:20–09:25 竞价参考价与 09:30 后实际成交价的差额。 */
+/* ★ 盘中净值序列（2026-10-19 起）
+   intraday-series.json 只增不删、保留最近 10 个交易日 ⇒ 收盘后也一直能看当日盈亏怎么变的。 */
 function loadSeries(){
   fetch('./data/intraday-series.json?_='+Date.now(), {cache:'no-store'}).then(function(r){ return r.ok ? r.json() : null })
     .then(function(j){ ISER = j; if(DATA){ renderDetail('main'); renderDetail('aux') } }).catch(function(){ /* 缺失不影响看板 */ })
-  fetch('./data/auction-log.json?_='+Date.now(), {cache:'no-store'}).then(function(r){ return r.ok ? r.json() : null })
-    .then(function(j){ AUCTION = j; if(DATA){ renderDetail('main'); renderDetail('aux') } }).catch(function(){ /* 缺失不影响看板 */ })
 }
 /* ★ 当日分时序列（画「今日操作股票」的分时图）。
    文件由每日收盘任务采集（lib/minute-chart.js），只留最近 8 个交易日。
@@ -711,44 +707,6 @@ function liveStatsHTML(s){
     + (mrow ? '<table style="margin-top:6px"><tr class="thead"><th class="l">月份</th><th>笔数</th><th>胜率</th><th>平均</th><th>盈亏</th></tr>'+mrow+'</table>' : '')
     + '<div style="color:var(--tx2);font-size:11px;margin:6px 2px 0">数据来自 data/trades-ledger.json（只增不删）。'
     + '台账与每日信号 data/signal-ledger.json 一起，用于样本外胜率回测：真实成交看这里，选股命中看信号台账。</div>'
-}
-
-/* ---------- 集合竞价对照：竞价参考价 → 实际成交价 ---------- */
-function aucOf(date, code, side){
-  if(!AUCTION || !AUCTION.days || !AUCTION.days[date]) return null
-  var arr = AUCTION.days[date].items || []
-  for(var i=0;i<arr.length;i++){ if(arr[i].code===code && arr[i].side===side) return arr[i] }
-  return null
-}
-function aucDiffTxt(it){
-  if(!it || it.diffPct == null) return ''
-  return '　<span style="color:var(--tx2);font-size:11px">竞价 '+price(it.auctionC)+' → '+price(it.actualC)
-    + ' <b class="'+cls(it.diffPct)+'">'+(it.diffPct>0?'+':'')+(it.diffPct*100).toFixed(2)+'%</b></span>'
-}
-function auctionRowsHTML(sid){
-  if(!AUCTION || !AUCTION.days) return ''
-  var dates = Object.keys(AUCTION.days).sort().slice(-10).reverse()
-  if(!dates.length) return ''
-  var pick = dates[0]
-  /* 优先当前查看日期，没有则取最新 */
-  if(IDAY && AUCTION.days[IDAY]) pick = IDAY
-  var day = AUCTION.days[pick] || {}
-  var items = day.items || []
-  if(!items.length) return ''
-  var rows = items.map(function(x){
-    var diff = x.diffPct
-    var diffTxt = diff == null ? '<span style="color:var(--tx2)">待成交</span>'
-      : '<span class="'+cls(diff)+'">'+(diff>0?'+':'')+(diff*100).toFixed(2)+'%</span>'
-    return '<tr><td class="l" data-l="类型">'+(x.side==='buy'?'买入':'卖出')+'</td>'
-      + '<td class="l" data-l="股票">'+esc(x.name)+'（'+x.code+'）</td>'
-      + '<td data-l="竞价">'+(x.auctionC?price(x.auctionC):'—')+'</td>'
-      + '<td data-l="实际">'+(x.actualC?price(x.actualC):'—')+'</td>'
-      + '<td data-l="差额">'+diffTxt+'</td></tr>'
-  }).join('')
-  return '<div class="stitle" style="font-size:13px">集合竞价对照 · '+cnDate(pick)+'</div>'
-    + '<table><tr class="thead"><th class="l">类型</th><th class="l">股票</th><th>竞价参考价</th><th>实际成交价</th><th>差额</th></tr>'+rows+'</table>'
-    + '<div style="color:var(--tx2);font-size:11px;margin:6px 2px 0">采集于 '+esc(day.capturedAt||'—')
-    + '（09:20–09:25 竞价窗口）。买入差额 = 竞价 → 09:30 开盘价，是真正的集合竞价滑点；卖出差额 = 竞价 → 尾盘成交价，含全天涨跌，不是滑点。</div>'
 }
 
 /* ---------- 详情区：持仓 / 当日盈亏 / 累计 / 可用金额 / 明日买入计划 ---------- */
@@ -1017,11 +975,9 @@ function renderDetail(where){
   var buys = (lvS && lvS.todayBuys && lvS.todayBuys.length) ? lvS.todayBuys : (s.todayBuys||[])
   var sells = (lvS && lvS.todaySells && lvS.todaySells.length) ? lvS.todaySells : (s.todaySells||[])
   var colA = '<table><tr class="thead"><th class="l">今日操作</th></tr>'
-  var aucDate = (LIVE && LIVE.bjDate) ? LIVE.bjDate : s.date
   if(buys.length){
     colA += buys.map(function(b){
-      return '<tr><td class="l" data-l=""><span class="tag b">买入</span> '+b.name+'（'+b.code+'）'+b.shares+' 股 @ '+price(b.buyC)+'（开盘成交）'
-        + aucDiffTxt(aucOf(aucDate, b.code, 'buy')) + '</td></tr>'
+      return '<tr><td class="l" data-l=""><span class="tag b">买入</span> '+b.name+'（'+b.code+'）'+b.shares+' 股 @ '+price(b.buyC)+'（开盘成交）</td></tr>'
     }).join('')
   }
   if(sells.length){
@@ -1072,10 +1028,6 @@ function renderDetail(where){
   colB += '</table>'
 
   h += '<div>'+colA+'</div><div>'+colB+'</div></div>'
-
-  /* 集合竞价对照（09:20–09:25 竞价 vs 实际成交） */
-  var auch = auctionRowsHTML(s.id)
-  if(auch) h += '<div style="margin:14px 0 4px">'+auch+'</div>'
 
   /* ★ 今日操作股票 · 当日分时图（用户 2026-10-16 要求）
      数据源 data/minute-chart.json（每日收盘采集 5 分钟全序列，只留最近 8 个交易日）。
