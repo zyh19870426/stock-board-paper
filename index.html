@@ -227,11 +227,6 @@
 #dataAge.ok{display:block;background:rgba(46,160,67,.12);border:1px solid rgba(46,160,67,.4);color:#5fd17e}
 #dataAge.warn{display:block;background:rgba(210,153,34,.14);border:1px solid rgba(210,153,34,.5);color:#e8b54e}
 #dataAge.bad{display:block;background:rgba(220,60,60,.14);border:1px solid rgba(220,60,60,.55);color:#ff8080}
-/* ★ ES 环境提示横幅（2026-10-23）：沿用 dataAge 的三档配色；停手=蓝紫色调区别于故障类横幅 */
-#esAlert{display:none;margin:0 0 14px;padding:11px 14px;border-radius:12px;font-size:13px;line-height:1.5;font-weight:600}
-#esAlert .a-sub{font-weight:400;opacity:.85;font-size:12px}
-#esAlert.ok{display:block;background:rgba(46,160,67,.12);border:1px solid rgba(46,160,67,.4);color:#5fd17e}
-#esAlert.bad{display:block;background:rgba(88,101,242,.16);border:1px solid rgba(88,101,242,.55);color:#9aa7ff}
 </style>
 </head>
 <body>
@@ -268,9 +263,6 @@
 
     <!-- ★ 数据时效横幅：看板停更时主动变黄/变红，避免"几天后才发现没更新" -->
     <div id="dataAge" style="display:none"></div>
-
-    <!-- ★ ES 环境提示横幅（2026-10-23）：择时版停手条件成立时显示 -->
-    <div id="esAlert" style="display:none"></div>
 
     <!-- ============ 主页视图：KPI + 收益曲线 + 持仓操作核心 ============ -->
     <div id="mainview">
@@ -679,37 +671,7 @@ function renderDataAge(){
   box.style.display = 'block'
 }
 
-/* ---------- ES（择时版）环境提示横幅（2026-10-23） ----------
- * 数据：dashboard.json 里 ES 条目的 risk.envStop。
- * 私有仓：envStop = {zbMa, premLag, zbThr, premThr, paused}（完整特征值，看「离阈值多远」）。
- * 公开仓：sync-pages.js 脱敏后只剩 {paused}（阈值/特征值可反推规则，不发）。
- * 停手 = 寒冬环境成立：ES 当日收盘起停开新仓（持仓照常），E1 不受影响。 */
-function renderEsAlert(){
-  var box = document.getElementById('esAlert')
-  if(!box) return
-  var es = null
-  ;((DATA && DATA.strategies) || []).forEach(function(x){
-    if(x.risk && x.risk.envStop && (!es || !es.risk)) es = x
-  })
-  if(!es){ box.style.display = 'none'; return }
-  var ev = es.risk.envStop
-  var name = es.name || es.id
-  if(ev.paused){
-    box.className = 'bad'
-    var detail = ''
-    if(ev.zbMa != null && ev.premLag != null){
-      detail = '<div class="a-sub">炸板率10日Ma ' + (ev.zbMa*100).toFixed(1) + '%（阈值 ' + (ev.zbThr*100).toFixed(0) + '%）'
-        + ' · 首板溢价21日Ma ' + (ev.premLag*100).toFixed(2) + '%（阈值 ' + (ev.premThr*100).toFixed(1) + '%）'
-        + ' · 累计停手 ' + (es.risk.envStopDays || 0) + ' 个交易日</div>'
-    }
-    box.innerHTML = '🟦 <b>' + esc(name) + ' 环境提示：寒冬环境成立，' + esc(name) + ' 收盘起停开新仓</b>'
-      + '<div class="a-sub">停手期间持仓照常管理；主策略 E1 不受影响、照常选股。两策略从此分化，正好观察停手是否省回撤。</div>' + detail
-  } else {
-    box.className = 'ok'
-    box.innerHTML = '🟦 <b>' + esc(name) + ' 环境正常</b><div class="a-sub">未达停手条件，照常选股。</div>'
-  }
-  box.style.display = 'block'
-}
+/* ---------- 当日盈亏走势（盘中快照序列，最近 10 个交易日可切换） ---------- */
 function setIDay(d){ IDAY = d; renderDetail('aux') }
 function intradaySeriesHTML(sid){
   if(!ISER || !ISER.days) return ''
@@ -1752,7 +1714,6 @@ function render(d){
   renderSide()
   renderHero()
   renderDataAge()
-  renderEsAlert()
   renderLive()
   renderDetail('main')
   renderDetail('aux')
