@@ -227,11 +227,6 @@
 #dataAge.ok{display:block;background:rgba(46,160,67,.12);border:1px solid rgba(46,160,67,.4);color:#5fd17e}
 #dataAge.warn{display:block;background:rgba(210,153,34,.14);border:1px solid rgba(210,153,34,.5);color:#e8b54e}
 #dataAge.bad{display:block;background:rgba(220,60,60,.14);border:1px solid rgba(220,60,60,.55);color:#ff8080}
-/* ★ ES 环境提示横幅（2026-10-23）：沿用 dataAge 的三档配色；停手=蓝紫色调区别于故障类横幅 */
-#esAlert{display:none;margin:0 0 14px;padding:11px 14px;border-radius:12px;font-size:13px;line-height:1.5;font-weight:600}
-#esAlert .a-sub{font-weight:400;opacity:.85;font-size:12px}
-#esAlert.ok{display:block;background:rgba(46,160,67,.12);border:1px solid rgba(46,160,67,.4);color:#5fd17e}
-#esAlert.bad{display:block;background:rgba(88,101,242,.16);border:1px solid rgba(88,101,242,.55);color:#9aa7ff}
 </style>
 </head>
 <body>
@@ -265,14 +260,9 @@
   <main class="main">
     <!-- QMT 策略健康横幅：只在 status!=ok 时由脚本显示 -->
     <div id="qmtHealth" style="display:none"></div>
-    <!-- ★ 2026-10-26 事故补强：数据新鲜度三枚徽章（qmt-health.json 的 data 段；缺 data 段时整块隐藏） -->
-    <div id="qmtDataBadges" style="display:none"></div>
 
     <!-- ★ 数据时效横幅：看板停更时主动变黄/变红，避免"几天后才发现没更新" -->
     <div id="dataAge" style="display:none"></div>
-
-    <!-- ★ ES 环境提示横幅（2026-10-23）：择时版停手条件成立时显示 -->
-    <div id="esAlert" style="display:none"></div>
 
     <!-- ============ 主页视图：KPI + 收益曲线 + 持仓操作核心 ============ -->
     <div id="mainview">
@@ -681,37 +671,7 @@ function renderDataAge(){
   box.style.display = 'block'
 }
 
-/* ---------- ES（择时版）环境提示横幅（2026-10-23） ----------
- * 数据：dashboard.json 里 ES 条目的 risk.envStop。
- * 私有仓：envStop = {zbMa, premLag, zbThr, premThr, paused}（完整特征值，看「离阈值多远」）。
- * 公开仓：sync-pages.js 脱敏后只剩 {paused}（阈值/特征值可反推规则，不发）。
- * 停手 = 寒冬环境成立：ES 当日收盘起停开新仓（持仓照常），E1 不受影响。 */
-function renderEsAlert(){
-  var box = document.getElementById('esAlert')
-  if(!box) return
-  var es = null
-  ;((DATA && DATA.strategies) || []).forEach(function(x){
-    if(x.risk && x.risk.envStop && (!es || !es.risk)) es = x
-  })
-  if(!es){ box.style.display = 'none'; return }
-  var ev = es.risk.envStop
-  var name = es.name || es.id
-  if(ev.paused){
-    box.className = 'bad'
-    var detail = ''
-    if(ev.zbMa != null && ev.premLag != null){
-      detail = '<div class="a-sub">炸板率10日Ma ' + (ev.zbMa*100).toFixed(1) + '%（阈值 ' + (ev.zbThr*100).toFixed(0) + '%）'
-        + ' · 首板溢价21日Ma ' + (ev.premLag*100).toFixed(2) + '%（阈值 ' + (ev.premThr*100).toFixed(1) + '%）'
-        + ' · 累计停手 ' + (es.risk.envStopDays || 0) + ' 个交易日</div>'
-    }
-    box.innerHTML = '🟦 <b>' + esc(name) + ' 环境提示：寒冬环境成立，' + esc(name) + ' 收盘起停开新仓</b>'
-      + '<div class="a-sub">停手期间持仓照常管理；主策略 E1 不受影响、照常选股。两策略从此分化，正好观察停手是否省回撤。</div>' + detail
-  } else {
-    box.className = 'ok'
-    box.innerHTML = '🟦 <b>' + esc(name) + ' 环境正常</b><div class="a-sub">未达停手条件，照常选股。</div>'
-  }
-  box.style.display = 'block'
-}
+/* ---------- 当日盈亏走势（盘中快照序列，最近 10 个交易日可切换） ---------- */
 function setIDay(d){ IDAY = d; renderDetail('aux') }
 function intradaySeriesHTML(sid){
   if(!ISER || !ISER.days) return ''
@@ -1754,7 +1714,6 @@ function render(d){
   renderSide()
   renderHero()
   renderDataAge()
-  renderEsAlert()
   renderLive()
   renderDetail('main')
   renderDetail('aux')
@@ -1989,93 +1948,7 @@ fetchJSON()
   function pull() {
     fetch('./data/qmt-health.json?_=' + Date.now(), { cache: 'no-store' })
       .then(function (r) { return r.ok ? r.json() : null })
-      .then(function (h) { paint(h); paintBadges(h) }).catch(function () {})
-  }
-  /* ★ 2026-10-26 事故补强：数据新鲜度徽章。
-     只读 h.data（check_e1_health.py 新增段）；老版 json 没有 data 段 => 整块隐藏，绝不报错。
-     配色沿用横幅：ok=绿 warn=黄 error=红，skip/缺失=灰。rootCause 为主徽章，suppressed 折成小字。 */
-  function esc(s) {
-    return String(s === null || s === undefined ? '' : s)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-  }
-  function badge(text, color, bg, title) {
-    return '<span title="' + esc(title || '') + '" style="display:inline-block;margin:0 8px 6px 0;' +
-      'padding:3px 10px;border-radius:999px;border:1px solid ' + color + ';background:' + bg + ';' +
-      'color:' + color + ';font-size:12px;font-weight:600;white-space:nowrap">' + esc(text) + '</span>'
-  }
-  function lvlColor(lv) {
-    if (lv === 'error') return ['#ef4444', 'rgba(239,68,68,.13)']
-    if (lv === 'warn') return ['#f59e0b', 'rgba(245,158,11,.13)']
-    if (lv === 'ok') return ['#22c55e', 'rgba(34,197,94,.12)']
-    return ['#9ca3af', 'rgba(156,163,175,.10)']   /* skip / 未知 */
-  }
-  function paintBadges(h) {
-    var box = document.getElementById('qmtDataBadges')
-    if (!box) return
-    var dt = h && h.data
-    if (!dt || typeof dt !== 'object') { box.style.display = 'none'; return }  /* 老版 json：静默降级 */
-    var out = []
-    /* 主徽章：根因（error 时才有） */
-    var rc = dt.rootCause
-    if (rc && rc.level === 'error') {
-      var c = lvlColor('error')
-      var msg = String(rc.message || '').slice(0, 140)
-      out.push('<span title="' + esc(rc.message || '') + '" style="display:inline-block;margin:0 8px 6px 0;' +
-        'padding:3px 10px;border-radius:999px;border:1px solid ' + c[0] + ';background:' + c[1] + ';' +
-        'color:' + c[0] + ';font-size:12px;font-weight:700;max-width:100%;overflow:hidden;' +
-        'text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom">根因·' +
-        esc(rc.code) + '：' + esc(msg) + '</span>')
-    }
-    /* 徽章 1：指数日线末根日期 */
-    var ip = dt.indexProbe || {}
-    var lc = lvlColor(ip.level)
-    var ipTxt = ip.level === 'error'
-      ? '指数日线停在 ' + (ip.lastDate || '?') + ' ✗'
-      : (ip.lastDate ? '指数日线 ' + ip.lastDate + ' ✓' : '指数日线 -')
-    out.push(badge(ipTxt, lc[0], lc[1], (ip.error || ip.note || '')))
-    /* 徽章 2：全市场今日覆盖率 */
-    var cv = dt.coverage || {}
-    var cc = lvlColor(cv.level)
-    var cvTxt = cv.level === 'skip'
-      ? '覆盖（未判定）'
-      : '覆盖 ' + cv.pct + '%（' + cv.covered + '/' + cv.total + '）' + (cv.level === 'ok' ? ' ✓' : '')
-    out.push(badge(cvTxt, cc[0], cc[1], cv.error || cv.note || ''))
-    /* 徽章 3：近 10 个交易日缺口天数 */
-    var gp = dt.gapDays || {}
-    var gc = lvlColor(gp.level)
-    var bad = gp.bad || []
-    var gpTxt = gp.level === 'skip' ? '缺口（未判定）'
-      : (bad.length ? '近10日缺口 ' + bad.length + ' 天（' + bad.map(function (b) { return b.date }).join('、') + '）'
-                    : '近10日无缺口 ✓')
-    out.push(badge(gpTxt, gc[0], gc[1],
-      bad.length ? ('缺失占比>50% 的日期：' + bad.map(function (b) { return b.date + ' ' + b.pct + '%' }).join('，'))
-                 : (gp.error || gp.note || '')))
-    /* 晚间选股产出（只在定局后有值，白天 skip 灰显） */
-    var sel = dt.selection || {}
-    var sc = lvlColor(sel.level)
-    var selTxt = sel.level === 'skip' ? '晚间选股（未到定局）'
-      : (sel.pendingCount > 0 ? '明日待买 ' + sel.pendingCount + ' 只 ✓'
-                             : '明日待买 0 只（' + (sel.level === 'info' ? '正常停手' : '见根因') + '）')
-    out.push(badge(selTxt, sc[0], sc[1], sel.note || ''))
-    /* 闸门状态（今天会红：事故遗留，准确，不要美化） */
-    var ev = dt.envSignal || {}
-    var ec = lvlColor(ev.level)
-    var evTxt = ev.level === 'skip' ? '环境闸门（未判定）'
-      : (ev.level === 'ok' ? '环境闸门已评估 ✓' : '环境闸门异常 ✗')
-    out.push(badge(evTxt, ec[0], ec[1], ev.note || ev.error || ''))
-    /* 被折叠的伴随现象：次要小字 */
-    var sup = dt.suppressed || []
-    var html = out.join('')
-    if (sup.length) {
-      html += '<div style="margin:-2px 0 4px;font-size:11px;opacity:.55">' +
-        '已折叠（伴随现象，见根因）：' + sup.map(function (s) {
-          return esc(s.code) + (s.level === 'error' && !s.causedBy ? '（独立故障，仍需排查）' : '')
-        }).join('、') + '</div>'
-    }
-    box.innerHTML = html
-    box.style.display = 'block'
-    box.style.margin = '0 0 12px'
-    box.style.lineHeight = '1.9'
+      .then(paint).catch(function () {})
   }
   pull()
   setInterval(pull, 300000)
