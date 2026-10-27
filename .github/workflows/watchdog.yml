@@ -1,0 +1,31 @@
+name: watchdog-pages
+# ============================================================
+#  看门狗：公开「模拟收益看板」超过 1 个交易日未更新就标红 + 邮件/微信提醒。
+#  彻底终结「页面静默卡住好几天才发现」。
+#  北京时间 21:00（13:00 UTC，Mon–Fri）检查 data/dashboard.json 的 date 字段。
+#  工作方式：
+#    · 期望最新交易日 = 今天（若为周末则回退到上周五）。
+#    · 允许下限 = 期望前一个交易日（1 个交易日宽限，吸收临时延迟）。
+#    · 若看板 date < 下限 → 视为滞后：工作流标红（GitHub 默认邮件通知仓库关注者）
+#      + 若公开仓配置了 WECOM_WEBHOOK / PUSHPLUS_TOKEN 则额外推送微信。
+#  本地 PaperDailyClose 定时任务是主要生产者；本看门狗是兜底报警，二者互补。
+# ============================================================
+on:
+  schedule:
+    - cron: '0 13 * * 1-5'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: 检查看板新鲜度
+        env:
+          WECOM_WEBHOOK: ${{ secrets.WECOM_WEBHOOK }}
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+        run: node .github/workflows/watchdog-check.js
